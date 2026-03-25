@@ -1,0 +1,14 @@
+{
+  "$schema": "https://railway.app/json-schema.json",
+  "build": {
+    "builder": "NIXPACKS"
+  },
+  "deploy": {
+    "startCommand": "uv --system run streamlit run app.py --server.port $PORT --server.address 0.0.0.0",
+    "env": {
+      "VENICE_API_KEY": {
+        "optional": false
+      }
+    }
+  }
+}
