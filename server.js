@@ -35,20 +35,26 @@ app.post('/api/generate', upload.array('documents'), async (req, res) => {
         const manuscriptText = chatResponse.data.choices[0].message.content;
 
         // 2. Generate an elegant chart/image for the publication
-        const imageResponse = await axios.post('https://api.venice.ai/api/v1/image/generate', {
-            model: 'nano-banana-2',
-            prompt: `A beautiful, minimalist scientific data visualization chart for a medical publication about: ${topic}. Clean white background, elegant French design.`,
-            style_preset: 'photographic',
-            height: 1024,
-            width: 1024
-        }, {
-            headers: {
-                'Authorization': `Bearer ${VENICE_API_KEY}`,
-                'Content-Type': 'application/json'
-            }
-        });
-        
-        const imageUrl = imageResponse.data.data?.[0]?.url || imageResponse.data.images?.[0] || ''; // Adjust depending on Venice exact image response format
+        let imageUrl = '';
+        try {
+            const imageResponse = await axios.post('https://api.venice.ai/api/v1/image/generate', {
+                model: 'nano-banana-2',
+                prompt: `A beautiful, minimalist scientific data visualization chart for a medical publication about: ${topic}. Clean white background, elegant enterprise design.`,
+                style_preset: 'photographic',
+                height: 1024,
+                width: 1024,
+                return_binary: false
+            }, {
+                headers: {
+                    'Authorization': `Bearer ${VENICE_API_KEY}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+            imageUrl = imageResponse.data.images ? imageResponse.data.images[0] : '';
+        } catch (imgError) {
+             console.error('Image Generation Error:', imgError.response?.data || imgError.message);
+             // gracefully continue if image fails
+        }
 
         res.json({
             success: true,
