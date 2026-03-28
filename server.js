@@ -15,6 +15,238 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 const VENICE_API_KEY = process.env.VENICE_API_KEY || '';
 
+// ============================================
+// GRAPH RAG IMPLEMENTATION
+// ============================================
+
+class GraphRAG {
+    constructor() {
+        this.chunks = []; // { id, text, embedding, source, entities: [] }
+        this.entities = new Map(); // entity -> { chunks: [], related: Set() }
+        this.relationships = []; // { from, to, type, chunkId }
+    }
+
+    // Cosine similarity between two vectors
+    cosineSimilarity(a, b) {
+        let dot = 0, normA = 0, normB = 0;
+        for (let i = 0; i < a.length; i++) {
+            dot += a[i] * b[i];
+            normA += a[i] * a[i];
+            normB += b[i] * b[i];
+        }
+        return dot / (Math.sqrt(normA) * Math.sqrt(normB));
+    }
+
+    // Smart chunking with overlap
+    chunkText(text, chunkSize = 1000, overlap = 200) {
+        const chunks = [];
+        let start = 0;
+        
+        while (start < text.length) {
+            let end = start + chunkSize;
+            
+            // Try to break at sentence or paragraph boundary
+            const nextPeriod = text.indexOf('. ', end);
+            const nextPara = text.indexOf('\n\n', end);
+            
+            if (nextPeriod !== -1 && nextPeriod < end + 100) {
+                end = nextPeriod + 1;
+            } else if (nextPara !== -1 && nextPara < end + 200) {
+                end = nextPara;
+            }
+            
+            chunks.push(text.substring(start, Math.min(end, text.length)));
+            start = end - overlap;
+        }
+        
+        return chunks.filter(c => c.trim().length > 50);
+    }
+
+    // Extract entities from text using simple patterns + AI for key entities
+    async extractEntities(text, chunkId, sourceFile) {
+        const entities = [];
+        
+        // Pattern-based extraction
+        const patterns = {
+            drug: /\b([A-Z][a-z]+(?:\s[A-Z][a-z]+)*\s?(?:\([^)]*\))?)(?:\s+(?:inhibitor|agonist|antagonist|therapy|treatment|drug|medication))/gi,
+            gene: /\b([A-Z]{2,}[0-9]*)\s*gene\b/gi,
+            protein: /\b([A-Z][a-z]+(?:\s[A-Z][a-z]+)*)\s*protein\b/gi,
+            disease: /\b(?:patients?\s+with\s+)?([A-Z][a-z]+(?:\s[A-Z][a-z]+)*(?:\s+disease|disorder|syndrome|cancer|carcinoma|tumor))\b/gi,
+            biomarker: /\b([A-Z][a-z]+(?:\s[A-Z][a-z]+)*)\s*(?:level|concentration|expression)\b/gi,
+            trial: /\b(Phase\s+[I1]+[I1\/]*\s+(?:clinical\s+)?trial)\b/gi
+        };
+        
+        for (const [type, regex] of Object.entries(patterns)) {
+            const matches = text.match(regex) || [];
+            for (const match of matches) {
+                const clean = match.trim().replace(/\s+/g, ' ');
+                if (clean.length > 3 && clean.length < 100) {
+                    entities.push({ name: clean, type, source: sourceFile, chunkId });
+                }
+            }
+        }
+        
+        return entities;
+    }
+
+    // Add documents to the graph
+    async addDocuments(documents, embeddings, sendProgressFn) {
+        console.log(`[GraphRAG] Adding ${documents.length} documents to graph...`);
+        
+        for (let i = 0; i < documents.length; i++) {
+            const { text, source } = documents[i];
+            const embedding = embeddings[i];
+            
+            // Chunk the document
+            const chunks = this.chunkText(text);
+            
+            for (let j = 0; j < chunks.length; j++) {
+                const chunkId = `${source}_chunk_${i}_${j}`;
+                
+                // Extract entities
+                const entities = await this.extractEntities(chunks[j], chunkId, source);
+                
+                // Store chunk
+                this.chunks.push({
+                    id: chunkId,
+                    text: chunks[j],
+                    embedding: embedding.embedding, // Use the Venice embedding
+                    source: source,
+                    entities: entities.map(e => e.name)
+                });
+                
+                // Build entity index
+                for (const entity of entities) {
+                    if (!this.entities.has(entity.name)) {
+                        this.entities.set(entity.name, { 
+                            type: entity.type, 
+                            chunks: [], 
+                            related: new Set() 
+                        });
+                    }
+                    this.entities.get(entity.name).chunks.push(chunkId);
+                }
+                
+                if (sendProgressFn) {
+                    sendProgressFn(2, `Processing chunk ${j + 1}/${chunks.length} from ${source}...`, 
+                        20 + Math.floor(((i * chunks.length + j) / (documents.length * chunks.length)) * 10));
+                }
+            }
+        }
+        
+        // Build relationships between chunks sharing entities
+        this.buildRelationships();
+        
+        console.log(`[GraphRAG] Graph built: ${this.chunks.length} chunks, ${this.entities.size} entities`);
+    }
+
+    // Build relationships between chunks
+    buildRelationships() {
+        for (const [entityName, data] of this.entities) {
+            const chunkIds = data.chunks;
+            
+            // Connect all chunks sharing this entity
+            for (let i = 0; i < chunkIds.length; i++) {
+                for (let j = i + 1; j < chunkIds.length; j++) {
+                    this.relationships.push({
+                        from: chunkIds[i],
+                        to: chunkIds[j],
+                        type: 'SHARES_ENTITY',
+                        entity: entityName
+                    });
+                    
+                    // Track related chunks
+                    if (!this.entities.get(entityName).related.has(chunkIds[j])) {
+                        this.entities.get(entityName).related.add(chunkIds[j]);
+                    }
+                }
+            }
+        }
+    }
+
+    // Hybrid retrieval: Vector + Graph traversal
+    async retrieve(query, queryEmbedding, topK = 5) {
+        console.log(`[GraphRAG] Retrieving for query: "${query.substring(0, 100)}..."`);
+        
+        // 1. Vector similarity search
+        const vectorScores = this.chunks.map(chunk => ({
+            chunk,
+            score: this.cosineSimilarity(queryEmbedding.embedding, chunk.embedding)
+        }));
+        
+        vectorScores.sort((a, b) => b.score - a.score);
+        const topVector = vectorScores.slice(0, topK);
+        
+        // 2. Graph expansion - find related chunks
+        const graphExpansion = new Map();
+        
+        for (const { chunk, score } of topVector) {
+            // Add original chunk
+            graphExpansion.set(chunk.id, { chunk, score: score * 1.0 });
+            
+            // Find related chunks via shared entities
+            for (const entityName of chunk.entities) {
+                const entityData = this.entities.get(entityName);
+                if (entityData) {
+                    for (const relatedChunkId of entityData.related) {
+                        if (!graphExpansion.has(relatedChunkId)) {
+                            const relatedChunk = this.chunks.find(c => c.id === relatedChunkId);
+                            if (relatedChunk) {
+                                const relatedScore = this.cosineSimilarity(queryEmbedding.embedding, relatedChunk.embedding);
+                                graphExpansion.set(relatedChunkId, { 
+                                    chunk: relatedChunk, 
+                                    score: relatedScore * 0.8 // Slightly lower weight for graph neighbors
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        // 3. Combine and rank
+        const results = Array.from(graphExpansion.values());
+        results.sort((a, b) => b.score - a.score);
+        
+        // Return top results with deduplication
+        const seen = new Set();
+        const finalResults = [];
+        
+        for (const result of results) {
+            // Deduplicate by content similarity (simple)
+            const key = result.chunk.text.substring(0, 100);
+            if (!seen.has(key)) {
+                seen.add(key);
+                finalResults.push(result);
+                if (finalResults.length >= topK * 1.5) break; // Get slightly more for diversity
+            }
+        }
+        
+        console.log(`[GraphRAG] Retrieved ${finalResults.length} chunks (${topVector.length} vector + ${finalResults.length - topVector.length} graph)`);
+        
+        return finalResults.slice(0, topK);
+    }
+
+    // Generate citation context
+    formatContext(results) {
+        return results.map((r, i) => 
+            `[Source ${i + 1}: ${r.chunk.source}]\n${r.chunk.text.substring(0, 800)}...\n(Entities: ${r.chunk.entities.slice(0, 5).join(', ') || 'none'})`
+        ).join('\n\n---\n\n');
+    }
+
+    // Get citation map for the response
+    getCitationMap(results) {
+        return results.map(r => ({
+            source: r.chunk.source,
+            entities: r.chunk.entities.slice(0, 3),
+            relevance: Math.round(r.score * 100) / 100
+        }));
+    }
+}
+
+// Global GraphRAG instance (in-memory)
+const graphRAG = new GraphRAG();
+
 // Helper to extract text from PDF buffers
 async function extractPDFText(buffer) {
     try {
@@ -95,39 +327,127 @@ app.post('/api/generate', upload.array('documents'), async (req, res) => {
         
         sendProgress(res, 1, 'Processing uploaded documents...', 10);
         
-        // 0. Process any uploaded reference documents into RAG setup
-        let uploadContext = "";
-        let docTexts = [];
+        // ============================================
+        // GRAPH RAG PROCESSING
+        // ============================================
+        let ragContext = "";
+        let citationMap = [];
+        
         if (req.files && req.files.length > 0) {
-            console.log(`[File Upload] Received ${req.files.length} documents for RAG processing.`);
+            console.log(`[GraphRAG] Processing ${req.files.length} documents...`);
             
+            // Extract text from all documents
+            const documents = [];
             for (const file of req.files) {
                 let extractedText = '';
                 
-                // Try to extract text based on file type
                 if (file.mimetype === 'application/pdf' || file.originalname.toLowerCase().endsWith('.pdf')) {
                     sendProgress(res, 1, `Extracting text from ${file.originalname}...`, 12);
                     extractedText = await extractPDFText(file.buffer);
                     if (!extractedText) {
-                        extractedText = `[Could not extract text from ${file.originalname} - may be image-based PDF]`;
+                        extractedText = `[Could not extract text from ${file.originalname}]`;
                     }
                 } else {
-                    // For text-based files
-                    extractedText = file.buffer.toString('utf8').substring(0, 5000);
+                    extractedText = file.buffer.toString('utf8');
                 }
                 
-                docTexts.push(`=== ${file.originalname} ===\n${extractedText}`);
+                if (extractedText && extractedText.length > 100) {
+                    documents.push({ text: extractedText, source: file.originalname });
+                }
             }
             
-            uploadContext = docTexts.join('\n\n---\n\n');
-            
-            sendProgress(res, 2, `Vectorizing ${req.files.length} document(s) with Venice AI...`, 20);
-            await createVeniceEmbeddings(docTexts);
+            if (documents.length > 0) {
+                sendProgress(res, 2, `Building Graph RAG: chunking ${documents.length} documents...`, 18);
+                
+                // Generate embeddings for all chunks
+                const allChunks = [];
+                for (const doc of documents) {
+                    const chunks = graphRAG.chunkText(doc.text);
+                    chunks.forEach(chunk => allChunks.push({ text: chunk, source: doc.source }));
+                }
+                
+                sendProgress(res, 2, `Embedding ${allChunks.length} chunks with Venice AI...`, 22);
+                const chunkTexts = allChunks.map(c => c.text);
+                const embeddings = await createVeniceEmbeddings(chunkTexts);
+                
+                if (embeddings) {
+                    sendProgress(res, 2, `Building knowledge graph with entities...`, 25);
+                    
+                    // Clear previous graph and build new one
+                    graphRAG.chunks = [];
+                    graphRAG.entities = new Map();
+                    graphRAG.relationships = [];
+                    
+                    // Add documents with embeddings
+                    const docsWithEmbeds = documents.map((doc, i) => ({
+                        text: doc.text,
+                        source: doc.source,
+                        embedding: embeddings[i] // Use document-level embedding for now
+                    }));
+                    
+                    // Re-chunk and embed at chunk level
+                    const chunkDocs = [];
+                    const chunkEmbeddings = [];
+                    
+                    for (const doc of documents) {
+                        const chunks = graphRAG.chunkText(doc.text);
+                        for (const chunk of chunks) {
+                            chunkDocs.push({ text: chunk, source: doc.source });
+                        }
+                    }
+                    
+                    // Get embeddings for all chunks
+                    if (chunkDocs.length > 0) {
+                        const chunkTextsForEmbed = chunkDocs.map(c => c.text);
+                        const chunkEmbeds = await createVeniceEmbeddings(chunkTextsForEmbed);
+                        
+                        if (chunkEmbeds) {
+                            for (let i = 0; i < chunkDocs.length; i++) {
+                                chunkDocs[i].embedding = chunkEmbeds[i];
+                            }
+                        }
+                    }
+                    
+                    // Build the graph
+                    for (const chunkDoc of chunkDocs) {
+                        if (chunkDoc.embedding) {
+                            await graphRAG.addDocuments([chunkDoc], [chunkDoc.embedding], sendProgress.bind(null, res));
+                        }
+                    }
+                    
+                    sendProgress(res, 2, `Graph built: ${graphRAG.chunks.length} chunks, ${graphRAG.entities.size} entities`, 28);
+                }
+            }
         }
 
         sendProgress(res, 3, 'Fetching clinical literature from PubMed...', 30);
+        
+        // Get topic embedding for RAG retrieval
+        let topicEmbedding = null;
+        try {
+            const topicEmbedRes = await axios.post('https://api.venice.ai/api/v1/embeddings', {
+                input: [topic],
+                model: 'voyage-2'
+            }, {
+                headers: { 'Authorization': `Bearer ${VENICE_API_KEY}`, 'Content-Type': 'application/json' }
+            });
+            topicEmbedding = topicEmbedRes.data.data[0];
+        } catch (e) {
+            console.log('[RAG] Could not get topic embedding, using fallback');
+        }
         const literatureContext = await fetchPubMedAbstracts(topic);
         console.log('[API] Literature context retrieved. Starting generation...');
+        
+        // ============================================
+        // RETRIEVE RELEVANT CONTEXT USING GRAPH RAG
+        // ============================================
+        if (graphRAG.chunks.length > 0 && topicEmbedding) {
+            sendProgress(res, 3, 'Retrieving relevant passages via Graph RAG...', 32);
+            const relevantChunks = await graphRAG.retrieve(topic, topicEmbedding, 8);
+            ragContext = graphRAG.formatContext(relevantChunks);
+            citationMap = graphRAG.getCitationMap(relevantChunks);
+            console.log(`[GraphRAG] Retrieved ${relevantChunks.length} relevant chunks`);
+        }
         
         let systemPrompt = 'You are an elite Medical Affairs AI writer.';
         let userInstruction = `Please generate the manuscript draft including Introduction, Methodology summary, and Conclusion based on this combined data. Cite the authors in-text.`;
@@ -154,15 +474,23 @@ app.post('/api/generate', upload.array('documents'), async (req, res) => {
         if (template) {
             userInstruction += '\n\n=== REQUIRED FORMAT TEMPLATE ===\n' + template;
         }
+        
+        // Add citation instructions
+        userInstruction += '\n\n=== CITATION INSTRUCTIONS ===\nWhen referencing uploaded documents, cite using [Source X] format where X is the source number. Include inline citations for specific claims, data, or findings from the provided context.';
 
-        sendProgress(res, 4, `Drafting ${outputType || 'manuscript'} content with Gemini 3 Flash...`, 45);
+        sendProgress(res, 4, `Drafting ${outputType || 'manuscript'} with Graph RAG citations...`, 45);
+        
+        // Build the context section
+        const contextSection = ragContext 
+            ? `=== RELEVANT DOCUMENT EXCERPTS (via Graph RAG) ===\n${ragContext}\n\n[Sources identified through semantic similarity + entity graph traversal]`
+            : uploadContext || "No internal documents provided.";
         
         // 2. Generate Manuscript Text using venice api
         const chatResponse = await axios.post('https://api.venice.ai/api/v1/chat/completions', {
             model: 'gemini-3-flash-preview',
             messages: [
                 { role: 'system', content: systemPrompt },
-                { role: 'user', content: `Topic: ${topic}\n\n=== RECENT PUBMED LITERATURE EXTRACT ===\n${literatureContext}\n\n=== INTERNAL RAG DOCUMENT CONTEXT ===\n${uploadContext || "No internal documents provided."}\n=====================================\n\n${userInstruction}` }
+                { role: 'user', content: `Topic: ${topic}\n\n=== PUBMED LITERATURE ===\n${literatureContext}\n\n${contextSection}\n=====================================\n\n${userInstruction}` }
             ]
         }, {
             headers: {
@@ -235,10 +563,19 @@ app.post('/api/generate', upload.array('documents'), async (req, res) => {
             }
         }
 
-        sendProgress(res, 7, 'Finalizing document...', 95);
+        sendProgress(res, 7, 'Finalizing document with references...', 95);
+        
+        // Build references section
+        let referencesSection = '';
+        if (citationMap.length > 0) {
+            const uniqueSources = [...new Set(citationMap.map(c => c.source))];
+            referencesSection = '\n\n## References\n\n' + uniqueSources.map((s, i) => 
+                `[${i + 1}] ${s} - Relevance: ${Math.round(citationMap.filter(c => c.source === s).reduce((a, b) => a + b.relevance, 0) / citationMap.filter(c => c.source === s).length * 100)}%`
+            ).join('\n');
+        }
         
         // Send final data and close SSE stream
-        res.write(`data: ${JSON.stringify({ complete: true, success: true, manuscript: manuscriptText, imageUrls: imageUrls })}
+        res.write(`data: ${JSON.stringify({ complete: true, success: true, manuscript: manuscriptText + referencesSection, imageUrls: imageUrls, citations: citationMap })}
 
 `);
         res.end();
