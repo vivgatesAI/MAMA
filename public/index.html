@@ -3,92 +3,157 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MAMA — Medical Affairs Manuscript AI</title>
+    <title>MAMA | Enterprise Medical Affairs</title>
+    <!-- Using Tailwind CDN for prototyping, in production install via npm -->
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
     <style>
-        body { font-family: 'Georgia', serif; background: linear-gradient(135deg, #f8f4f0, #ede4d5); }
-        .hero { background: linear-gradient(rgba(58,47,31,0.85), rgba(58,47,31,0.9)), url('https://picsum.photos/id/1015/2000/1200'); background-size: cover; }
-        .card { transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
-        .card:hover { transform: translateY(-8px); box-shadow: 0 25px 50px -12px rgb(0 0 0 / 0.15); }
-        .loader { border: 4px solid rgba(255, 255, 255, 0.3); border-top: 4px solid #fff; border-radius: 50%; width: 24px; height: 24px; animation: spin 1s linear infinite; display: none; }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap');
+        body { 
+            font-family: 'Inter', system-ui, sans-serif; 
+            background-color: #f4f7fb; 
+            color: #1e293b; 
+        }
+        .header-bar { 
+            background-color: #0f172a; 
+            color: white; 
+            border-bottom: 4px solid #0ea5e9; 
+        }
+        .card { 
+            background: white; 
+            border: 1px solid #e2e8f0; 
+            border-radius: 8px; 
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03); 
+        }
+        .btn-primary { 
+            background-color: #0284c7; 
+            color: white; 
+            transition: background-color 0.2s; 
+        }
+        .btn-primary:hover { 
+            background-color: #0369a1; 
+        }
+        .loader { 
+            border: 3px solid rgba(255,255,255,0.3); 
+            border-top: 3px solid #ffffff; 
+            border-radius: 50%; 
+            width: 18px; 
+            height: 18px; 
+            animation: spin 1s linear infinite; 
+            display: none; 
+        }
+        @keyframes spin { 
+            0% { transform: rotate(0deg); } 
+            100% { transform: rotate(360deg); } 
+        }
     </style>
 </head>
-<body class="min-h-screen text-[#2c2520]">
-    <div class="hero h-[60vh] flex items-center justify-center text-white text-center">
-        <div class="max-w-3xl px-6">
-            <h1 class="text-6xl font-light tracking-tight mb-4">MAMA</h1>
-            <p class="text-2xl font-light opacity-90">Medical Affairs Manuscript AI</p>
-            <p class="mt-6 text-lg opacity-75">Elegant. Precise. Powered by Gemini 3 Flash Preview & Nano Banana 2.</p>
+<body class="min-h-screen flex flex-col">
+    <!-- Enterprise Header -->
+    <header class="header-bar py-4 px-8 flex justify-between items-center">
+        <div class="flex items-center gap-3">
+            <i class="fas fa-dna text-2xl text-sky-400"></i>
+            <div>
+                <h1 class="text-xl font-semibold tracking-wide">MAMA System</h1>
+                <p class="text-xs text-slate-400">Medical Affairs Manuscript AI — Enterprise Edition</p>
+            </div>
         </div>
-    </div>
+        <div class="text-sm text-slate-300 flex items-center gap-4">
+            <span><i class="fas fa-lock text-slate-400 mr-1"></i> Secure Session</span>
+            <div class="flex items-center gap-2 border-l border-slate-700 pl-4">
+                <div class="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center font-bold">MD</div>
+                <span>Medical Director</span>
+            </div>
+        </div>
+    </header>
 
-    <div id="upload" class="max-w-5xl mx-auto px-6 py-12 -mt-24 relative z-10">
-        <div class="card bg-white rounded-3xl shadow-xl p-10">
-            <h2 class="text-3xl font-light mb-8 flex items-center gap-3">
-                <i class="fas fa-microscope text-amber-600"></i> Generate Manuscript
-            </h2>
-            
-            <div class="grid md:grid-cols-2 gap-10">
-                <div>
-                    <label class="block text-sm font-medium mb-2 text-stone-600">Research Topic or Study Title</label>
-                    <textarea id="topic" rows="4" placeholder="Efficacy of Novel Therapy in HER2+ Breast Cancer..." 
-                           class="w-full px-6 py-4 rounded-2xl border border-stone-200 focus:outline-none focus:border-amber-400 text-lg bg-stone-50"></textarea>
+    <!-- Main Content Workspace -->
+    <main class="flex-grow p-8 max-w-7xl mx-auto w-full grid grid-cols-1 lg:grid-cols-12 gap-8">
+        
+        <!-- Left Column: Input Form -->
+        <div class="lg:col-span-4 space-y-6">
+            <div class="card p-6">
+                <h2 class="text-lg font-semibold mb-4 border-b border-slate-100 pb-3 flex items-center gap-2 text-slate-800">
+                    <i class="fas fa-edit text-sky-600"></i> Protocol Definition
+                </h2>
+                
+                <div class="mb-5">
+                    <label class="block text-sm font-medium text-slate-700 mb-2">Study Title or Mechanism <span class="text-red-500">*</span></label>
+                    <textarea id="topic" rows="5" placeholder="Enter clinical trial title, endpoint data summary, or MOA..." 
+                           class="w-full px-4 py-3 rounded-md border border-slate-300 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-transparent text-sm bg-slate-50"></textarea>
+                </div>
 
-                    <div class="mt-8 border-2 border-dashed border-stone-200 rounded-2xl p-8 text-center bg-stone-50 hover:border-amber-400 transition cursor-pointer">
-                        <i class="fas fa-file-pdf text-3xl text-stone-400 mb-2"></i>
-                        <p class="text-sm text-stone-600">Optional: Drop reference PDFs or CSR data</p>
-                        <input type="file" id="documents" multiple class="mt-4 text-xs">
+                <div class="mb-5">
+                    <label class="block text-sm font-medium text-slate-700 mb-2">Reference Documents (CSR, SAP)</label>
+                    <div class="border-2 border-dashed border-slate-300 rounded-md p-6 text-center bg-slate-50 hover:bg-slate-100 transition cursor-pointer">
+                        <i class="fas fa-cloud-upload-alt text-2xl text-slate-400 mb-2"></i>
+                        <p class="text-sm text-slate-600">Click to attach secure documents</p>
+                        <p class="text-xs text-slate-400 mt-1">PDF, DOCX up to 50MB</p>
+                        <input type="file" id="documents" multiple class="hidden">
                     </div>
                 </div>
 
-                <div class="flex flex-col justify-end">
-                    <button id="generateBtn" onclick="generateManuscript()" 
-                            class="w-full bg-[#3a2f1f] hover:bg-black text-white py-5 rounded-2xl text-xl font-light tracking-wide transition flex items-center justify-center gap-3">
-                        <span id="btnText">Synthesize Publication</span>
-                        <div id="loader" class="loader"></div>
-                    </button>
-                    <p class="text-center text-xs text-stone-400 mt-4">
-                        Powered by Gemini 3 Flash Preview & Nano Banana 2 (Venice AI API)
-                    </p>
+                <button id="generateBtn" onclick="generateManuscript()" 
+                        class="w-full btn-primary py-3 rounded-md text-sm font-medium tracking-wide flex items-center justify-center gap-2 shadow-sm">
+                    <span id="btnText">Execute Generation</span>
+                    <div id="loader" class="loader"></div>
+                </button>
+                <div class="text-center text-xs text-slate-400 mt-4 flex flex-col gap-1">
+                    <span>Powered by Gemini 3 Flash & Nano Banana 2</span>
+                    <span class="flex items-center justify-center gap-1"><i class="fas fa-shield-alt"></i> Venice AI E2E Encrypted</span>
                 </div>
             </div>
         </div>
 
-        <!-- Output UI Container -->
-        <div id="outputArea" class="hidden mt-12 bg-white rounded-3xl shadow-xl p-12">
-            <h3 class="text-2xl font-light mb-6 border-b border-stone-100 pb-4">Generated Manuscript</h3>
-            
-            <!-- Generated Image -->
-            <div id="imageContainer" class="mb-10 text-center"></div>
+        <!-- Right Column: Output Viewer -->
+        <div class="lg:col-span-8">
+            <div id="outputContainer" class="card p-8 min-h-[600px] flex flex-col">
+                <div id="placeholderState" class="flex-grow flex flex-col items-center justify-center text-slate-400">
+                    <i class="fas fa-file-invoice text-6xl mb-4 text-slate-200"></i>
+                    <h3 class="text-lg font-medium text-slate-500">Document Workspace</h3>
+                    <p class="text-sm mt-1">Generated manuscripts and scientific figures will appear here.</p>
+                </div>
+                
+                <div id="resultState" class="hidden">
+                    <div class="flex justify-between items-center mb-6 border-b border-slate-200 pb-4">
+                        <h2 class="text-xl font-semibold text-slate-800">Generated Draft</h2>
+                        <div class="flex gap-2">
+                            <button class="px-4 py-2 text-sm border border-slate-300 rounded-md text-slate-600 hover:bg-slate-50 font-medium flex items-center gap-2 shadow-sm">
+                                <i class="fas fa-download"></i> Export PDF
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- Generated Image (Data Visualization) -->
+                    <div id="imageContainer" class="mb-8 text-center bg-slate-50 p-6 border border-slate-100 rounded-lg"></div>
 
-            <!-- Generated Text -->
-            <div class="prose max-w-none prose-stone">
-                <p id="manuscriptText" class="whitespace-pre-wrap text-stone-700 leading-relaxed text-lg"></p>
+                    <!-- Generated Text -->
+                    <div class="prose max-w-none text-slate-700 text-sm leading-relaxed whitespace-pre-wrap" id="manuscriptText"></div>
+                </div>
             </div>
         </div>
-    </div>
+        
+    </main>
 
     <script>
         async function generateManuscript() {
             const btnText = document.getElementById('btnText');
             const loader = document.getElementById('loader');
-            const outputArea = document.getElementById('outputArea');
+            const resultState = document.getElementById('resultState');
+            const placeholderState = document.getElementById('placeholderState');
             const topic = document.getElementById('topic').value;
 
             if (!topic) {
-                alert("Please enter a research topic.");
+                alert("Please enter a research topic or study protocol.");
                 return;
             }
 
-            // UI loading state
-            btnText.innerText = "Synthesizing...";
+            btnText.innerText = "Processing...";
             loader.style.display = "block";
-            outputArea.classList.add('hidden');
+            placeholderState.classList.add('hidden');
+            resultState.classList.add('hidden');
 
             try {
-                // Call our local Node backend which hits Venice API
                 const response = await fetch('/api/generate', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -99,25 +164,25 @@
 
                 if (data.error) throw new Error(data.error);
 
-                // Populate Text
                 document.getElementById('manuscriptText').innerText = data.manuscript || "No text generated.";
 
-                // Populate Image
                 const imageContainer = document.getElementById('imageContainer');
+                imageContainer.innerHTML = ''; // clear previous
+                
                 if (data.imageUrl) {
-                    // Note: If Venice returns base64, syntax handles it. If URL, it uses the URL.
-                    let imgSource = data.imageUrl.startsWith('http') ? data.imageUrl : \`data:image/png;base64,\${data.imageUrl}\`;
-                    imageContainer.innerHTML = \`<img src="\${imgSource}" alt="Generated Data Chart" class="mx-auto rounded-xl shadow-md max-h-[400px]">
-                    <p class="text-xs text-stone-400 mt-2 italic">Figure 1. Generated Visualization</p>\`;
+                    // String concatenation to avoid JS literal parsing errors
+                    let imgSource = data.imageUrl.startsWith('http') ? data.imageUrl : 'data:image/png;base64,' + data.imageUrl;
+                    imageContainer.innerHTML = '<img src="' + imgSource + '" alt="Figure 1" class="mx-auto border border-slate-200 shadow-sm max-h-[400px] mb-3"><p class="text-xs text-slate-500 font-medium">Figure 1. AI-Generated Data Visualization</p>';
                 }
 
-                outputArea.classList.remove('hidden');
+                resultState.classList.remove('hidden');
                 
             } catch (error) {
                 console.error("Error:", error);
-                alert("Generation failed: " + error.message);
+                alert("System Error: " + error.message);
+                placeholderState.classList.remove('hidden');
             } finally {
-                btnText.innerText = "Synthesize Publication";
+                btnText.innerText = "Execute Generation";
                 loader.style.display = "none";
             }
         }
