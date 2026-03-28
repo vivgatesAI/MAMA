@@ -3,481 +3,694 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MAMA | Enterprise Medical Affairs</title>
-    <!-- Using Tailwind CDN for prototyping, in production install via npm -->
+    <title>MAMA — Medical Affairs Manuscript AI</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap');
-        body { 
-            font-family: 'Inter', system-ui, sans-serif; 
-            background-color: #f4f7fb; 
-            color: #1e293b; 
+        * {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
         }
-        .header-bar { 
-            background-color: #0f172a; 
-            color: white; 
-            border-bottom: 4px solid #0ea5e9; 
+        
+        body {
+            background: linear-gradient(180deg, #f5f7fa 0%, #eef2f6 100%);
+            min-height: 100vh;
         }
-        .card { 
-            background: white; 
-            border: 1px solid #e2e8f0; 
-            border-radius: 8px; 
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03); 
+        
+        /* Glassmorphism header */
+        .glass-header {
+            background: rgba(255, 255, 255, 0.72);
+            backdrop-filter: saturate(180%) blur(20px);
+            -webkit-backdrop-filter: saturate(180%) blur(20px);
+            border-bottom: 1px solid rgba(0, 0, 0, 0.08);
         }
-        .btn-primary { 
-            background-color: #0284c7; 
-            color: white; 
-            transition: background-color 0.2s; 
+        
+        /* Soft elevated cards */
+        .apple-card {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            box-shadow: 
+                0 1px 2px rgba(0, 0, 0, 0.02),
+                0 4px 12px rgba(0, 0, 0, 0.04),
+                0 12px 48px rgba(0, 0, 0, 0.06);
+            border: 1px solid rgba(255, 255, 255, 0.8);
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), 
+                        box-shadow 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
-        .btn-primary:hover { 
-            background-color: #0369a1; 
+        
+        .apple-card:hover {
+            box-shadow: 
+                0 1px 2px rgba(0, 0, 0, 0.02),
+                0 8px 24px rgba(0, 0, 0, 0.06),
+                0 20px 64px rgba(0, 0, 0, 0.08);
         }
-        .loader { 
-            border: 3px solid rgba(255,255,255,0.3); 
-            border-top: 3px solid #ffffff; 
-            border-radius: 50%; 
-            width: 18px; 
-            height: 18px; 
-            animation: spin 1s linear infinite; 
-            display: none; 
+        
+        /* Primary button - Apple style */
+        .btn-primary {
+            background: linear-gradient(135deg, #007AFF 0%, #0056D3 100%);
+            color: white;
+            border-radius: 12px;
+            font-weight: 500;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 4px 12px rgba(0, 122, 255, 0.3);
         }
-        @keyframes spin { 
-            0% { transform: rotate(0deg); } 
-            100% { transform: rotate(360deg); } 
+        
+        .btn-primary:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 6px 20px rgba(0, 122, 255, 0.4);
+        }
+        
+        .btn-primary:active {
+            transform: translateY(0);
+            box-shadow: 0 2px 8px rgba(0, 122, 255, 0.3);
+        }
+        
+        /* Secondary button */
+        .btn-secondary {
+            background: rgba(0, 0, 0, 0.04);
+            color: #1d1d1f;
+            border-radius: 12px;
+            font-weight: 500;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        
+        .btn-secondary:hover {
+            background: rgba(0, 0, 0, 0.08);
+        }
+        
+        /* Custom inputs */
+        .apple-input {
+            background: #f5f5f7;
+            border: 1px solid transparent;
+            border-radius: 12px;
+            transition: all 0.2s ease;
+        }
+        
+        .apple-input:focus {
+            background: #ffffff;
+            border-color: #007AFF;
+            box-shadow: 0 0 0 4px rgba(0, 122, 255, 0.1);
+            outline: none;
+        }
+        
+        /* Radio cards */
+        .radio-card {
+            background: #f5f5f7;
+            border: 2px solid transparent;
+            border-radius: 16px;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            cursor: pointer;
+        }
+        
+        .radio-card:hover {
+            background: #ebebef;
+        }
+        
+        .radio-card.selected {
+            background: rgba(0, 122, 255, 0.08);
+            border-color: #007AFF;
+        }
+        
+        .radio-card.selected .radio-indicator {
+            background: #007AFF;
+            border-color: #007AFF;
+        }
+        
+        .radio-indicator {
+            width: 20px;
+            height: 20px;
+            border: 2px solid #c7c7cc;
+            border-radius: 50%;
+            transition: all 0.2s ease;
+            position: relative;
+        }
+        
+        .radio-card.selected .radio-indicator::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 8px;
+            height: 8px;
+            background: white;
+            border-radius: 50%;
+        }
+        
+        /* File upload zone */
+        .upload-zone {
+            background: linear-gradient(135deg, #f5f7fa 0%, #eef2f6 100%);
+            border: 2px dashed #d1d1d6;
+            border-radius: 20px;
+            transition: all 0.3s ease;
+        }
+        
+        .upload-zone:hover {
+            border-color: #007AFF;
+            background: linear-gradient(135deg, rgba(0, 122, 255, 0.04) 0%, rgba(0, 122, 255, 0.02) 100%);
+        }
+        
+        /* Stepper */
+        .step-icon {
+            width: 44px;
+            height: 44px;
+            border-radius: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        
+        .step-pending {
+            background: #f5f5f7;
+            color: #8e8e93;
+        }
+        
+        .step-active {
+            background: #007AFF;
+            color: white;
+            box-shadow: 0 8px 24px rgba(0, 122, 255, 0.35);
+            animation: pulse-soft 2s ease-in-out infinite;
+        }
+        
+        .step-complete {
+            background: #34c759;
+            color: white;
+        }
+        
+        @keyframes pulse-soft {
+            0%, 100% { transform: scale(1); box-shadow: 0 8px 24px rgba(0, 122, 255, 0.35); }
+            50% { transform: scale(1.02); box-shadow: 0 12px 32px rgba(0, 122, 255, 0.45); }
+        }
+        
+        /* Progress bar */
+        .progress-track {
+            height: 4px;
+            background: #e5e5ea;
+            border-radius: 2px;
+            overflow: hidden;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #007AFF, #34c759);
+            border-radius: 2px;
+            transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        
+        /* Smooth fade animations */
+        .fade-in {
+            animation: fadeIn 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        /* File list item */
+        .file-item {
+            background: rgba(0, 0, 0, 0.02);
+            border-radius: 12px;
+            border: 1px solid rgba(0, 0, 0, 0.04);
+        }
+        
+        /* Scrollbar styling */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        
+        ::-webkit-scrollbar-thumb {
+            background: #c7c7cc;
+            border-radius: 4px;
+        }
+        
+        ::-webkit-scrollbar-thumb:hover {
+            background: #8e8e93;
+        }
+        
+        /* Status badge */
+        .status-badge {
+            background: rgba(52, 199, 89, 0.12);
+            color: #248a3d;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: 600;
+            padding: 4px 10px;
+        }
+        
+        /* Empty state */
+        .empty-state-icon {
+            width: 80px;
+            height: 80px;
+            background: linear-gradient(135deg, #f5f7fa 0%, #eef2f6 100%);
+            border-radius: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        /* Split view for results */
+        .split-pane {
+            display: grid;
+            grid-template-columns: 1fr 380px;
+            gap: 24px;
+        }
+        
+        @media (max-width: 1200px) {
+            .split-pane {
+                grid-template-columns: 1fr;
+            }
         }
     </style>
-    <!-- Add html2pdf client library -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 </head>
-<body class="min-h-screen flex flex-col">
-    <!-- Enterprise Header -->
-    <header class="header-bar py-4 px-8 flex justify-between items-center">
-        <div class="flex items-center gap-3">
-            <i class="fas fa-dna text-2xl text-sky-400"></i>
-            <div>
-                <h1 class="text-xl font-semibold tracking-wide">MAMA System</h1>
-                <p class="text-xs text-slate-400">Medical Affairs Manuscript AI — Enterprise Edition</p>
+<body class="text-gray-900">
+    <!-- Header -->
+    <header class="glass-header fixed top-0 left-0 right-0 z-50">
+        <div class="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
+            <div class="flex items-center gap-4">
+                <div class="w-10 h-10 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-blue-500/30">
+                    <i class="fas fa-dna text-lg"></i>
+                </div>
+                <div>
+                    <h1 class="text-lg font-semibold tracking-tight text-gray-900">MAMA</h1>
+                    <p class="text-xs text-gray-500 font-medium">Medical Affairs Manuscript AI</p>
+                </div>
             </div>
-        </div>
-        <div class="text-sm text-slate-300 flex items-center gap-4">
-            <span><i class="fas fa-lock text-slate-400 mr-1"></i> Secure Session</span>
-            <div class="flex items-center gap-2 border-l border-slate-700 pl-4">
-                <div class="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center font-bold">MD</div>
-                <span>Medical Director</span>
+            <div class="flex items-center gap-4">
+                <div class="flex items-center gap-2 px-3 py-1.5 bg-gray-100 rounded-full">
+                    <div class="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                    <span class="text-xs font-medium text-gray-600">Secure Session</span>
+                </div>
+                <div class="w-9 h-9 bg-gradient-to-br from-gray-700 to-gray-800 rounded-full flex items-center justify-center text-white text-sm font-semibold">
+                    MD
+                </div>
             </div>
         </div>
     </header>
 
-    <!-- Main Content Workspace -->
-    <main class="flex-grow p-8 max-w-7xl mx-auto w-full grid grid-cols-1 lg:grid-cols-12 gap-8">
-        
-        <!-- Left Column: Input Form -->
-        <div class="lg:col-span-4 space-y-6">
-            <div class="card p-6">
-                <h2 class="text-lg font-semibold mb-4 border-b border-slate-100 pb-3 flex items-center gap-2 text-slate-800">
-                    <i class="fas fa-edit text-sky-600"></i> Protocol Definition
-                </h2>
-                
-                <div class="mb-5">
-                    <label class="block text-sm font-medium text-slate-700 mb-2">Target Output Format <span class="text-red-500">*</span></label>
-                    <div class="grid grid-cols-2 md:grid-cols-3 gap-3 mb-2">
-                        <label class="cursor-pointer group flex items-start gap-3 p-3 border border-slate-200 rounded-lg hover:border-sky-500 hover:bg-sky-50 transition-all has-[:checked]:border-sky-500 has-[:checked]:bg-sky-50 has-[:checked]:ring-1 has-[:checked]:ring-sky-500">
-                            <input type="radio" name="outputType" value="manuscript" class="mt-1 flex-shrink-0 text-sky-600 focus:ring-sky-500 border-gray-300" checked>
-                            <div class="flex flex-col">
-                                <span class="text-sm font-semibold text-slate-800 group-hover:text-sky-700">Manuscript</span>
-                                <span class="text-xs text-slate-500 mt-0.5 leading-tight">Full length journal article</span>
-                            </div>
-                        </label>
-                        <label class="cursor-pointer group flex items-start gap-3 p-3 border border-slate-200 rounded-lg hover:border-sky-500 hover:bg-sky-50 transition-all has-[:checked]:border-sky-500 has-[:checked]:bg-sky-50 has-[:checked]:ring-1 has-[:checked]:ring-sky-500">
-                            <input type="radio" name="outputType" value="abstract" class="mt-1 flex-shrink-0 text-sky-600 focus:ring-sky-500 border-gray-300">
-                            <div class="flex flex-col">
-                                <span class="text-sm font-semibold text-slate-800 group-hover:text-sky-700">Congress Abstract</span>
-                                <span class="text-xs text-slate-500 mt-0.5 leading-tight">Max 300 words structured</span>
-                            </div>
-                        </label>
-                        <label class="cursor-pointer group flex items-start gap-3 p-3 border border-slate-200 rounded-lg hover:border-sky-500 hover:bg-sky-50 transition-all has-[:checked]:border-sky-500 has-[:checked]:bg-sky-50 has-[:checked]:ring-1 has-[:checked]:ring-sky-500">
-                            <input type="radio" name="outputType" value="summary" class="mt-1 flex-shrink-0 text-sky-600 focus:ring-sky-500 border-gray-300">
-                            <div class="flex flex-col">
-                                <span class="text-sm font-semibold text-slate-800 group-hover:text-sky-700">Executive Summary</span>
-                                <span class="text-xs text-slate-500 mt-0.5 leading-tight">High-level insights</span>
-                            </div>
-                        </label>
-                        <label class="cursor-pointer group flex items-start gap-3 p-3 border border-slate-200 rounded-lg hover:border-sky-500 hover:bg-sky-50 transition-all has-[:checked]:border-sky-500 has-[:checked]:bg-sky-50 has-[:checked]:ring-1 has-[:checked]:ring-sky-500">
-                            <input type="radio" name="outputType" value="press" class="mt-1 flex-shrink-0 text-sky-600 focus:ring-sky-500 border-gray-300">
-                            <div class="flex flex-col">
-                                <span class="text-sm font-semibold text-slate-800 group-hover:text-sky-700">Press Release</span>
-                                <span class="text-xs text-slate-500 mt-0.5 leading-tight">Public facing announcement</span>
-                            </div>
-                        </label>
-                        <label class="cursor-pointer group flex items-start gap-3 p-3 border border-slate-200 rounded-lg hover:border-sky-500 hover:bg-sky-50 transition-all has-[:checked]:border-sky-500 has-[:checked]:bg-sky-50 has-[:checked]:ring-1 has-[:checked]:ring-sky-500">
-                            <input type="radio" name="outputType" value="pls" class="mt-1 flex-shrink-0 text-sky-600 focus:ring-sky-500 border-gray-300">
-                            <div class="flex flex-col">
-                                <span class="text-sm font-semibold text-slate-800 group-hover:text-sky-700">Plain Language</span>
-                                <span class="text-xs text-slate-500 mt-0.5 leading-tight">Patient-friendly summary</span>
-                            </div>
-                        </label>
-                    </div>
-                </div>
-
-                <div class="mb-5">
-                    <label class="block text-sm font-medium text-slate-700 mb-2">Study Title or Mechanism <span class="text-red-500">*</span></label>
-                    <textarea id="topic" rows="5" placeholder="Enter clinical trial title, endpoint data summary, or MOA..." 
-                           class="w-full px-4 py-3 rounded-md border border-slate-300 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-transparent text-sm bg-slate-50"></textarea>
-                </div>
-                <div class="mb-5">
-                    <label class="block text-sm font-medium text-slate-700 mb-2">Format Template (Optional)</label>
-                    <textarea id="template" rows="3" placeholder="Define headers, bullet points, or style guidelines (e.g. 'Must include sections: 1. Background, 2. Mechanism, 3. Safety')..." 
-                           class="w-full px-4 py-3 rounded-md border border-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent text-sm bg-indigo-50/30"></textarea>
-                </div>
-
-                <div class="mb-5">
-                    <label class="block text-sm font-medium text-slate-700 mb-2">Reference Documents (CSR, SAP)</label>
-                    <div class="border-2 border-dashed border-slate-300 rounded-lg p-6 text-center bg-slate-50 hover:bg-slate-100 transition-colors duration-200 cursor-pointer group hover:border-sky-400" onclick="document.getElementById('documents').click()">
-                        <div class="w-14 h-14 bg-white border border-slate-200 text-sky-500 rounded-full flex items-center justify-center mx-auto mb-3 shadow-sm group-hover:scale-110 transition-transform duration-300">
-                            <i class="fas fa-cloud-upload-alt text-2xl"></i>
-                        </div>
-                        <p class="text-sm font-semibold text-slate-700 mb-1">Click to securely upload study documents</p>
-                        <p class="text-xs text-slate-500 max-w-xs mx-auto">Supports PDF, DOCX, XLSX up to 50MB. Files are E2E encrypted and processed locally.</p>
-                        <input type="file" id="documents" multiple class="hidden" onchange="updateFileList(this)">
-                    </div>
-                    
-                    <div id="fileListContainer" class="mt-4 hidden animate-fade-in-up">
-                        <div class="flex items-center justify-between mb-2 pb-2 border-b border-slate-100">
-                            <span class="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1">
-                                <i class="fas fa-database text-sky-500"></i> Vectorized for RAG
-                            </span>
-                            <span id="fileCountBadge" class="text-xs bg-sky-100 text-sky-700 px-2.5 py-0.5 rounded-full font-bold shadow-sm border border-sky-200">0 files</span>
-                        </div>
-                        <div id="fileList" class="space-y-2.5 max-h-56 overflow-y-auto pr-1"></div>
-                    </div>
-                </div>
-
-                <button id="generateBtn" onclick="generateManuscript()" 
-                        class="w-full btn-primary py-3 rounded-md text-sm font-medium tracking-wide flex items-center justify-center gap-2 shadow-sm">
-                    <span id="btnText">Execute Generation</span>
-                    <div id="loader" class="loader"></div>
-                </button>
-                <div class="text-center text-xs text-slate-400 mt-4 flex flex-col gap-1">
-                    <span>Powered by Kimi k2.5 & Flux 2</span>
-                    <span class="flex items-center justify-center gap-1"><i class="fas fa-shield-alt"></i> Venice AI E2E Encrypted</span>
-                </div>
+    <!-- Main Content -->
+    <main class="pt-24 pb-12 px-6">
+        <div class="max-w-7xl mx-auto">
+            <!-- Title Section -->
+            <div class="mb-8">
+                <h2 class="text-3xl font-semibold text-gray-900 tracking-tight mb-2">Create Publication</h2>
+                <p class="text-gray-500 text-base">Generate manuscripts, abstracts, and summaries with AI-powered assistance.</p>
             </div>
-        </div>
-
-        <!-- Right Column: Output Viewer -->
-        <div class="lg:col-span-8">
-            <div id="outputContainer" class="card p-8 min-h-[600px] flex flex-col relative w-full h-auto">
-                <div id="placeholderState" class="flex-grow flex flex-col items-center justify-center text-slate-400">
-                    <i class="fas fa-file-invoice text-6xl mb-4 text-slate-200"></i>
-                    <h3 class="text-lg font-medium text-slate-500">Document Workspace</h3>
-                    <p class="text-sm mt-1">Generated manuscripts and scientific figures will appear here.</p>
-                </div>
-
-                <!-- Visual Stepper Progress (Hidden by default) -->
-                <div id="progressState" class="hidden flex-grow flex flex-col items-center justify-center">
-                    <div class="w-full max-w-2xl">
-                        <!-- Stepper Header -->
+            
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                <!-- Left Panel: Input Form -->
+                <div class="lg:col-span-4 space-y-6">
+                    <div class="apple-card p-6">
+                        <!-- Output Type Selection -->
                         <div class="mb-6">
-                            <h3 class="text-lg font-semibold text-slate-800 mb-1">Processing Pipeline</h3>
-                            <p id="currentStepDesc" class="text-sm text-slate-500">Initializing workflow...</p>
+                            <label class="block text-sm font-semibold text-gray-900 mb-3">Document Type</label>
+                            <div class="grid grid-cols-2 gap-3">
+                                <div class="radio-card p-4 selected" onclick="selectType(this, 'manuscript')">
+                                    <div class="flex items-start gap-3">
+                                        <div class="radio-indicator mt-0.5"></div>
+                                        <div>
+                                            <div class="text-sm font-semibold text-gray-900">Manuscript</div>
+                                            <div class="text-xs text-gray-500 mt-0.5">Full journal article</div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="radio-card p-4" onclick="selectType(this, 'abstract')">
+                                    <div class="flex items-start gap-3">
+                                        <div class="radio-indicator mt-0.5"></div>
+                                        <div>
+                                            <div class="text-sm font-semibold text-gray-900">Abstract</div>
+                                            <div class="text-xs text-gray-500 mt-0.5">300 words max</div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="radio-card p-4" onclick="selectType(this, 'summary')">
+                                    <div class="flex items-start gap-3">
+                                        <div class="radio-indicator mt-0.5"></div>
+                                        <div>
+                                            <div class="text-sm font-semibold text-gray-900">Executive</div>
+                                            <div class="text-xs text-gray-500 mt-0.5">Key insights</div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="radio-card p-4" onclick="selectType(this, 'press')">
+                                    <div class="flex items-start gap-3">
+                                        <div class="radio-indicator mt-0.5"></div>
+                                        <div>
+                                            <div class="text-sm font-semibold text-gray-900">Press</div>
+                                            <div class="text-xs text-gray-500 mt-0.5">Public release</div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="radio-card p-4 col-span-2" onclick="selectType(this, 'pls')">
+                                    <div class="flex items-start gap-3">
+                                        <div class="radio-indicator mt-0.5"></div>
+                                        <div>
+                                            <div class="text-sm font-semibold text-gray-900">Plain Language Summary</div>
+                                            <div class="text-xs text-gray-500 mt-0.5">Patient-friendly, accessible language</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <input type="hidden" id="outputType" value="manuscript">
                         </div>
-                        
-                        <!-- Stepper Visual -->
-                        <div class="relative">
-                            <!-- Progress Bar Background -->
-                            <div class="absolute top-5 left-0 w-full h-1 bg-slate-200 rounded"></div>
-                            <!-- Active Progress Bar -->
-                            <div id="stepperProgressBar" class="absolute top-5 left-0 h-1 bg-sky-500 rounded transition-all duration-500" style="width: 0%"></div>
+
+                        <!-- Study Title -->
+                        <div class="mb-6">
+                            <label class="block text-sm font-semibold text-gray-900 mb-2">Study Title or Mechanism</label>
+                            <textarea id="topic" rows="4" placeholder="Enter clinical trial title, endpoint data summary, or mechanism of action..." 
+                                   class="apple-input w-full px-4 py-3 text-sm resize-none"></textarea>
+                        </div>
+
+                        <!-- Template -->
+                        <div class="mb-6">
+                            <label class="block text-sm font-semibold text-gray-900 mb-2">Format Template <span class="text-gray-400 font-normal">(Optional)</span></label>
+                            <textarea id="template" rows="2" placeholder="Custom structure: 1. Background, 2. Methods, 3. Results..." 
+                                   class="apple-input w-full px-4 py-3 text-sm resize-none bg-blue-50/50"></textarea>
+                        </div>
+
+                        <!-- File Upload -->
+                        <div class="mb-6">
+                            <label class="block text-sm font-semibold text-gray-900 mb-2">Reference Documents</label>
+                            <div class="upload-zone p-6 text-center cursor-pointer" onclick="document.getElementById('documents').click()">
+                                <div class="w-14 h-14 bg-white rounded-2xl flex items-center justify-center mx-auto mb-3 shadow-sm">
+                                    <i class="fas fa-cloud-upload-alt text-2xl text-blue-500"></i>
+                                </div>
+                                <p class="text-sm font-medium text-gray-900 mb-1">Drop files or click to upload</p>
+                                <p class="text-xs text-gray-500">PDF, DOCX, XLSX up to 50MB</p>
+                                <input type="file" id="documents" multiple class="hidden" onchange="updateFileList(this)">
+                            </div>
                             
-                            <!-- Steps -->
-                            <div class="relative flex justify-between">
-                                <!-- Step 1: Upload -->
-                                <div class="flex flex-col items-center" style="width: 14%">
-                                    <div id="step1-icon" class="w-10 h-10 rounded-full bg-slate-200 flex items-center justify-center text-slate-500 text-sm font-bold border-4 border-white shadow-sm transition-all duration-300">
-                                        <i class="fas fa-upload"></i>
-                                    </div>
-                                    <span class="text-[10px] font-medium text-slate-500 mt-2 text-center leading-tight">Upload &<br>Vectorize</span>
-                                </div>
-                                
-                                <!-- Step 2: PubMed -->
-                                <div class="flex flex-col items-center" style="width: 14%">
-                                    <div id="step2-icon" class="w-10 h-10 rounded-full bg-slate-200 flex items-center justify-center text-slate-500 text-sm font-bold border-4 border-white shadow-sm transition-all duration-300">
-                                        <i class="fas fa-database"></i>
-                                    </div>
-                                    <span class="text-[10px] font-medium text-slate-500 mt-2 text-center leading-tight">PubMed<br>Literature</span>
-                                </div>
-                                
-                                <!-- Step 3: RAG -->
-                                <div class="flex flex-col items-center" style="width: 14%">
-                                    <div id="step3-icon" class="w-10 h-10 rounded-full bg-slate-200 flex items-center justify-center text-slate-500 text-sm font-bold border-4 border-white shadow-sm transition-all duration-300">
-                                        <i class="fas fa-vector-square"></i>
-                                    </div>
-                                    <span class="text-[10px] font-medium text-slate-500 mt-2 text-center leading-tight">Generate<br>Embeddings</span>
-                                </div>
-                                
-                                <!-- Step 4: Draft -->
-                                <div class="flex flex-col items-center" style="width: 14%">
-                                    <div id="step4-icon" class="w-10 h-10 rounded-full bg-slate-200 flex items-center justify-center text-slate-500 text-sm font-bold border-4 border-white shadow-sm transition-all duration-300">
-                                        <i class="fas fa-pen-fancy"></i>
-                                    </div>
-                                    <span class="text-[10px] font-medium text-slate-500 mt-2 text-center leading-tight">Draft<br>Manuscript</span>
-                                </div>
-                                
-                                <!-- Step 5: Visualize -->
-                                <div class="flex flex-col items-center" style="width: 14%">
-                                    <div id="step5-icon" class="w-10 h-10 rounded-full bg-slate-200 flex items-center justify-center text-slate-500 text-sm font-bold border-4 border-white shadow-sm transition-all duration-300">
-                                        <i class="fas fa-lightbulb"></i>
-                                    </div>
-                                    <span class="text-[10px] font-medium text-slate-500 mt-2 text-center leading-tight">Plan<br>Visuals</span>
-                                </div>
-                                
-                                <!-- Step 6: Images -->
-                                <div class="flex flex-col items-center" style="width: 14%">
-                                    <div id="step6-icon" class="w-10 h-10 rounded-full bg-slate-200 flex items-center justify-center text-slate-500 text-sm font-bold border-4 border-white shadow-sm transition-all duration-300">
-                                        <i class="fas fa-images"></i>
-                                    </div>
-                                    <span class="text-[10px] font-medium text-slate-500 mt-2 text-center leading-tight">Generate<br>Images</span>
-                                </div>
-                                
-                                <!-- Step 7: Finalize -->
-                                <div class="flex flex-col items-center" style="width: 14%">
-                                    <div id="step7-icon" class="w-10 h-10 rounded-full bg-slate-200 flex items-center justify-center text-slate-500 text-sm font-bold border-4 border-white shadow-sm transition-all duration-300">
-                                        <i class="fas fa-check"></i>
-                                    </div>
-                                    <span class="text-[10px] font-medium text-slate-500 mt-2 text-center leading-tight">Finalize<br>Document</span>
-                                </div>
+                            <div id="fileListContainer" class="mt-3 hidden">
+                                <div id="fileList" class="space-y-2"></div>
                             </div>
                         </div>
-                        
-                        <!-- Current Task Detail -->
-                        <div class="mt-8 p-4 bg-slate-50 rounded-lg border border-slate-200">
-                            <div class="flex items-center gap-3">
-                                <div id="taskSpinner" class="w-8 h-8 border-3 border-sky-200 border-t-sky-600 rounded-full animate-spin"></div>
-                                <div>
-                                    <p id="taskMessage" class="text-sm font-medium text-slate-800">Initializing secure workflow...</p>
-                                    <p id="taskPercent" class="text-xs text-slate-500">0%</p>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <!-- Activity Log -->
-                        <div class="mt-4">
-                            <div class="flex items-center justify-between mb-2">
-                                <span class="text-xs font-semibold text-slate-600 uppercase tracking-wider">Activity Log</span>
-                                <span id="liveIndicator" class="text-[10px] text-emerald-600 font-medium flex items-center gap-1">
-                                    <span class="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></span> Live
-                                </span>
-                            </div>
-                            <ul id="progressLog" class="text-xs text-slate-500 space-y-1 max-h-32 overflow-y-auto w-full border border-slate-200 p-3 rounded bg-white">
-                                <li class="flex items-center gap-2 text-slate-400">
-                                    <i class="fas fa-info-circle text-sky-500"></i> Waiting to start...
-                                </li>
-                            </ul>
-                        </div>
+
+                        <!-- Generate Button -->
+                        <button id="generateBtn" onclick="generateManuscript()" 
+                                class="btn-primary w-full py-3.5 text-sm font-medium flex items-center justify-center gap-2">
+                            <span id="btnText">Generate Document</span>
+                            <i id="btnIcon" class="fas fa-arrow-right text-xs"></i>
+                        </button>
                     </div>
                 </div>
-                
-                <div id="resultState" class="hidden flex-grow flex flex-col h-full w-full">
-                    <div class="flex justify-between items-center mb-4 border-b border-slate-200 pb-4">
-                        <h2 class="text-xl font-semibold text-slate-800">Generated Draft</h2>
-                        <div class="flex gap-2">
-                            <button onclick="exportToPDF()" class="px-4 py-2 text-sm border border-slate-300 rounded-md text-slate-600 hover:bg-slate-50 font-medium flex items-center gap-2 shadow-sm">
-                                <i class="fas fa-download"></i> Export PDF
-                            </button>
+
+                <!-- Right Panel: Output -->
+                <div class="lg:col-span-8">
+                    <div class="apple-card min-h-[700px] flex flex-col relative overflow-hidden">
+                        
+                        <!-- Placeholder State -->
+                        <div id="placeholderState" class="flex-grow flex flex-col items-center justify-center text-center p-12">
+                            <div class="empty-state-icon mb-6">
+                                <i class="fas fa-file-lines text-3xl text-gray-400"></i>
+                            </div>
+                            <h3 class="text-xl font-semibold text-gray-900 mb-2">Ready to Create</h3>
+                            <p class="text-gray-500 max-w-sm">Your generated manuscript will appear here. Enter your study details to begin.</p>
                         </div>
-                    </div>
-                    
-                    <div class="flex flex-col md:flex-row gap-6 h-full flex-grow relative pb-10">
-                        <div class="w-full md:w-2/3 h-full min-h-[500px]">
-                            <label class="text-xs text-slate-400 font-medium uppercase tracking-wider mb-2 block">Manuscript Text (Editable)</label>
-                            <textarea id="manuscriptText" class="w-full h-full min-h-[500px] p-4 text-sm text-slate-800 border border-slate-300 rounded focus:outline-none focus:ring-2 focus:ring-sky-500 resize-y leading-relaxed font-sans"></textarea>
+
+                        <!-- Progress State -->
+                        <div id="progressState" class="hidden flex-grow flex flex-col p-8">
+                            <div class="text-center mb-8">
+                                <h3 class="text-2xl font-semibold text-gray-900 mb-2">Generating Document</h3>
+                                <p id="currentStepDesc" class="text-gray-500">Initializing workflow...</p>
+                            </div>
+                            
+                            <!-- Stepper -->
+                            <div class="max-w-3xl mx-auto w-full mb-8">
+                                <div class="relative">
+                                    <!-- Progress Line -->
+                                    <div class="absolute top-5 left-0 right-0 h-1 bg-gray-200 rounded-full">
+                                        <div id="progressLine" class="h-full bg-gradient-to-r from-blue-500 to-green-500 rounded-full transition-all duration-700" style="width: 0%"></div>
+                                    </div>
+                                    
+                                    <!-- Steps -->
+                                    <div class="relative flex justify-between">
+                                        <div class="flex flex-col items-center" style="width: 14%">
+                                            <div id="step1" class="step-icon step-active">
+                                                <i class="fas fa-upload"></i>
+                                            </div>
+                                            <span class="text-[11px] font-medium text-gray-500 mt-2 text-center">Upload</span>
+                                        </div>
+                                        <div class="flex flex-col items-center" style="width: 14%">
+                                            <div id="step2" class="step-icon step-pending">
+                                                <i class="fas fa-database"></i>
+                                            </div>
+                                            <span class="text-[11px] font-medium text-gray-500 mt-2 text-center">PubMed</span>
+                                        </div>
+                                        <div class="flex flex-col items-center" style="width: 14%">
+                                            <div id="step3" class="step-icon step-pending">
+                                                <i class="fas fa-brain"></i>
+                                            </div>
+                                            <span class="text-[11px] font-medium text-gray-500 mt-2 text-center">Embed</span>
+                                        </div>
+                                        <div class="flex flex-col items-center" style="width: 14%">
+                                            <div id="step4" class="step-icon step-pending">
+                                                <i class="fas fa-pen"></i>
+                                            </div>
+                                            <span class="text-[11px] font-medium text-gray-500 mt-2 text-center">Draft</span>
+                                        </div>
+                                        <div class="flex flex-col items-center" style="width: 14%">
+                                            <div id="step5" class="step-icon step-pending">
+                                                <i class="fas fa-lightbulb"></i>
+                                            </div>
+                                            <span class="text-[11px] font-medium text-gray-500 mt-2 text-center">Plan</span>
+                                        </div>
+                                        <div class="flex flex-col items-center" style="width: 14%">
+                                            <div id="step6" class="step-icon step-pending">
+                                                <i class="fas fa-image"></i>
+                                            </div>
+                                            <span class="text-[11px] font-medium text-gray-500 mt-2 text-center">Images</span>
+                                        </div>
+                                        <div class="flex flex-col items-center" style="width: 14%">
+                                            <div id="step7" class="step-icon step-pending">
+                                                <i class="fas fa-check"></i>
+                                            </div>
+                                            <span class="text-[11px] font-medium text-gray-500 mt-2 text-center">Done</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Current Task -->
+                            <div class="apple-card p-5 mb-6">
+                                <div class="flex items-center gap-4">
+                                    <div id="taskSpinner" class="w-10 h-10 rounded-full bg-blue-500/10 flex items-center justify-center">
+                                        <i class="fas fa-circle-notch fa-spin text-blue-500"></i>
+                                    </div>
+                                    <div class="flex-grow">
+                                        <p id="taskMessage" class="text-sm font-semibold text-gray-900">Initializing secure workflow...</p>
+                                        <div class="progress-track mt-2">
+                                            <div id="taskProgress" class="progress-fill" style="width: 0%"></div>
+                                        </div>
+                                    </div>
+                                    <span id="taskPercent" class="text-sm font-semibold text-gray-900">0%</span>
+                                </div>
+                            </div>
+                            
+                            <!-- Activity Log -->
+                            <div class="flex-grow overflow-hidden">
+                                <div class="flex items-center justify-between mb-3">
+                                    <span class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Activity</span>
+                                    <div class="flex items-center gap-1.5">
+                                        <div class="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"></div>
+                                        <span class="text-[10px] font-medium text-green-600">Live</span>
+                                    </div>
+                                </div>
+                                <div id="progressLog" class="space-y-2 text-sm text-gray-600 max-h-48 overflow-y-auto">
+                                    <div class="flex items-center gap-2 text-gray-400">
+                                        <i class="fas fa-info-circle text-xs"></i>
+                                        <span>Waiting to start...</span>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
-                        <div class="w-full md:w-1/3 flex flex-col gap-4 max-h-[500px] overflow-y-auto">
-                           <label class="text-xs text-slate-400 font-medium uppercase tracking-wider block">Generated Figures & UI Visuals</label>
-                           <div id="imageContainer" class="text-center bg-slate-50 p-4 border border-slate-100 rounded-lg"></div>
+
+                        <!-- Result State -->
+                        <div id="resultState" class="hidden flex-col flex-grow">
+                            <!-- Toolbar -->
+                            <div class="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+                                <div class="flex items-center gap-3">
+                                    <div class="w-8 h-8 bg-green-500 rounded-lg flex items-center justify-center text-white">
+                                        <i class="fas fa-check text-sm"></i>
+                                    </div>
+                                    <div>
+                                        <h3 class="text-sm font-semibold text-gray-900">Document Ready</h3>
+                                        <p class="text-xs text-gray-500">Generated with Kimi k2.5</p>
+                                    </div>
+                                </div>
+                                <button onclick="exportToPDF()" class="btn-secondary px-4 py-2 text-sm flex items-center gap-2">
+                                    <i class="fas fa-download"></i>
+                                    Export PDF
+                                </button>
+                            </div>
+                            
+                            <!-- Content -->
+                            <div class="split-pane flex-grow p-6 overflow-hidden">
+                                <div class="flex flex-col">
+                                    <label class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Manuscript Text</label>
+                                    <textarea id="manuscriptText" class="flex-grow apple-input p-4 text-sm resize-none" style="min-height: 500px;"></textarea>
+                                </div>
+                                <div class="flex flex-col">
+                                    <label class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Generated Figures</label>
+                                    <div id="imageContainer" class="flex-grow overflow-y-auto space-y-4 apple-card p-4" style="max-height: 500px;">
+                                        <p class="text-sm text-gray-400 text-center py-8">No figures generated</p>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
-        
     </main>
 
     <script>
+        // Type selection
+        function selectType(element, type) {
+            document.querySelectorAll('.radio-card').forEach(card => card.classList.remove('selected'));
+            element.classList.add('selected');
+            document.getElementById('outputType').value = type;
+        }
+
+        // File handling
         function updateFileList(input) {
-            const fileListContainer = document.getElementById('fileListContainer');
-            const fileList = document.getElementById('fileList');
-            const fileCountBadge = document.getElementById('fileCountBadge');
+            const container = document.getElementById('fileListContainer');
+            const list = document.getElementById('fileList');
             
-            fileList.innerHTML = '';
+            list.innerHTML = '';
             
             if (input.files.length > 0) {
-                fileListContainer.classList.remove('hidden');
-                fileCountBadge.innerText = `${input.files.length} file${input.files.length > 1 ? 's' : ''}`;
-            } else {
-                fileListContainer.classList.add('hidden');
-            }
-            
-            Array.from(input.files).forEach((file, index) => {
-                const fileSize = (file.size / (1024 * 1024)).toFixed(2); // MB
-                const iconClass = getFileIconClass(file.name);
-                
-                const fileHtml = `
-                    <div class="group flex items-center justify-between bg-white p-3 rounded-lg border border-slate-200 shadow-sm hover:shadow-md hover:border-sky-300 transition-all duration-200 relative overflow-hidden">
-                        <div class="absolute left-0 top-0 bottom-0 w-1 bg-green-500 rounded-l-lg opacity-0 group-hover:opacity-100 transition-opacity"></div>
-                        <div class="flex items-center gap-3 w-full pr-8">
-                            <div class="w-10 h-10 rounded-md flex items-center justify-center bg-slate-50 flex-shrink-0 border border-slate-100">
-                                <i class="fas fa-${iconClass} text-xl shadow-sm"></i>
+                container.classList.remove('hidden');
+                Array.from(input.files).forEach((file, index) => {
+                    const size = (file.size / (1024 * 1024)).toFixed(1);
+                    const div = document.createElement('div');
+                    div.className = 'file-item p-3 flex items-center justify-between';
+                    div.innerHTML = `
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 bg-white rounded-xl flex items-center justify-center shadow-sm">
+                                <i class="fas ${getFileIcon(file.name)} text-lg"></i>
                             </div>
-                            <div class="flex-grow min-w-0">
-                                <p class="text-sm font-semibold text-slate-800 truncate" title="${file.name}">${file.name}</p>
-                                <div class="flex flex-wrap items-center gap-x-3 mt-1">
-                                    <span class="text-xs font-medium text-slate-500"><i class="fas fa-hdd opacity-60 mr-1"></i>${fileSize} MB</span>
-                                    <span class="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-100">
-                                        <i class="fas fa-check-circle text-emerald-500"></i> Vectorized
-                                    </span>
-                                </div>
+                            <div>
+                                <p class="text-sm font-medium text-gray-900 truncate max-w-[140px]">${file.name}</p>
+                                <p class="text-xs text-gray-500">${size} MB</p>
                             </div>
                         </div>
-                        <button onclick="event.stopPropagation(); removeFile(${index})" class="absolute right-3 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full flex items-center justify-center text-slate-400 hover:text-rose-500 hover:bg-rose-50 transition-colors focus:outline-none" title="Remove file">
-                            <i class="fas fa-trash-alt"></i>
-                        </button>
-                    </div>
-                `;
-                fileList.insertAdjacentHTML('beforeend', fileHtml);
-            });
+                        <div class="flex items-center gap-2">
+                            <span class="status-badge">Vectorized</span>
+                            <button onclick="removeFile(${index})" class="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-red-500 transition-colors">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
+                    `;
+                    list.appendChild(div);
+                });
+            } else {
+                container.classList.add('hidden');
+            }
         }
-
-        function getFileIconClass(filename) {
+        
+        function getFileIcon(filename) {
             const ext = filename.split('.').pop().toLowerCase();
-            if (['pdf'].includes(ext)) return 'file-pdf text-rose-500';
-            if (['doc', 'docx'].includes(ext)) return 'file-word text-blue-600';
-            if (['xls', 'xlsx', 'csv'].includes(ext)) return 'file-excel text-emerald-600';
-            if (['jpg', 'jpeg', 'png', 'svg'].includes(ext)) return 'file-image text-purple-500';
-            if (['txt', 'md'].includes(ext)) return 'file-alt text-slate-600';
-            if (['zip', 'rar'].includes(ext)) return 'file-archive text-amber-500';
-            return 'file text-slate-400';
+            if (ext === 'pdf') return 'fa-file-pdf text-red-500';
+            if (['doc', 'docx'].includes(ext)) return 'fa-file-word text-blue-500';
+            if (['xls', 'xlsx'].includes(ext)) return 'fa-file-excel text-green-500';
+            return 'fa-file text-gray-400';
         }
-
-        function removeFile(indexToRemove) {
+        
+        function removeFile(index) {
             const input = document.getElementById('documents');
             const dt = new DataTransfer();
-            
             Array.from(input.files).forEach((file, i) => {
-                if (i !== indexToRemove) {
-                    dt.items.add(file);
-                }
+                if (i !== index) dt.items.add(file);
             });
-            
             input.files = dt.files;
             updateFileList(input);
         }
 
-        // Stepper state management
-        const stepIcons = {
-            1: 'step1-icon',
-            2: 'step2-icon', 
-            3: 'step3-icon',
-            4: 'step4-icon',
-            5: 'step5-icon',
-            6: 'step6-icon',
-            7: 'step7-icon'
-        };
-        
+        // Stepper management
         function updateStepper(step, percent) {
-            // Update progress bar
-            document.getElementById('stepperProgressBar').style.width = percent + '%';
+            document.getElementById('progressLine').style.width = percent + '%';
             
-            // Update step icons
             for (let i = 1; i <= 7; i++) {
-                const icon = document.getElementById(stepIcons[i]);
+                const el = document.getElementById(`step${i}`);
                 if (i < step) {
-                    // Completed
-                    icon.className = 'w-10 h-10 rounded-full bg-emerald-500 flex items-center justify-center text-white text-sm font-bold border-4 border-white shadow-sm transition-all duration-300';
-                    icon.innerHTML = '<i class="fas fa-check"></i>';
+                    el.className = 'step-icon step-complete';
                 } else if (i === step) {
-                    // Active
-                    icon.className = 'w-10 h-10 rounded-full bg-sky-500 flex items-center justify-center text-white text-sm font-bold border-4 border-white shadow-lg animate-pulse transition-all duration-300';
+                    el.className = 'step-icon step-active';
                 } else {
-                    // Pending
-                    icon.className = 'w-10 h-10 rounded-full bg-slate-200 flex items-center justify-center text-slate-500 text-sm font-bold border-4 border-white shadow-sm transition-all duration-300';
-                    icon.innerHTML = {
-                        1: '<i class="fas fa-upload"></i>',
-                        2: '<i class="fas fa-database"></i>',
-                        3: '<i class="fas fa-vector-square"></i>',
-                        4: '<i class="fas fa-pen-fancy"></i>',
-                        5: '<i class="fas fa-lightbulb"></i>',
-                        6: '<i class="fas fa-images"></i>',
-                        7: '<i class="fas fa-check"></i>'
-                    }[i];
+                    el.className = 'step-icon step-pending';
                 }
             }
         }
         
         function addLogEntry(message, type = 'info') {
-            const logEl = document.getElementById('progressLog');
-            const icon = type === 'success' ? 'check-circle text-emerald-500' : 
-                        type === 'error' ? 'exclamation-circle text-rose-500' : 
-                        'cog fa-spin text-sky-500';
-            const li = document.createElement('li');
-            li.className = 'flex items-center gap-2 animate-fade-in';
-            li.innerHTML = `<i class="fas fa-${icon}"></i> <span>${message}</span>`;
-            logEl.insertBefore(li, logEl.firstChild);
+            const log = document.getElementById('progressLog');
+            const div = document.createElement('div');
+            div.className = 'flex items-center gap-2 fade-in';
+            
+            const icon = type === 'success' ? 'fa-check-circle text-green-500' : 
+                        type === 'error' ? 'fa-exclamation-circle text-red-500' : 
+                        'fa-circle-notch fa-spin text-blue-500';
+            
+            div.innerHTML = `<i class="fas ${icon} text-xs"></i> <span>${message}</span>`;
+            log.insertBefore(div, log.firstChild);
         }
 
+        // Main generation function
         async function generateManuscript() {
+            const btn = document.getElementById('generateBtn');
             const btnText = document.getElementById('btnText');
-            const resultState = document.getElementById('resultState');
-            const placeholderState = document.getElementById('placeholderState');
-            const progressState = document.getElementById('progressState');
-            
+            const btnIcon = document.getElementById('btnIcon');
             const topic = document.getElementById('topic').value;
-            const outputTypeInput = document.querySelector('input[name="outputType"]:checked');
-            const outputType = outputTypeInput ? outputTypeInput.value : 'manuscript';
-
-            if (!topic) {
-                alert("Please enter a research topic or study protocol.");
+            const outputType = document.getElementById('outputType').value;
+            
+            if (!topic.trim()) {
+                alert('Please enter a study title or mechanism');
                 return;
             }
-
-            btnText.innerText = "Processing...";
-            btnText.classList.add('opacity-50', 'cursor-not-allowed');
-            document.getElementById('generateBtn').disabled = true;
-
-            placeholderState.classList.add('hidden');
-            resultState.classList.add('hidden');
-            progressState.classList.remove('hidden');
+            
+            // Update UI state
+            btn.disabled = true;
+            btnText.textContent = 'Generating...';
+            btnIcon.className = 'fas fa-circle-notch fa-spin text-xs';
+            
+            document.getElementById('placeholderState').classList.add('hidden');
+            document.getElementById('resultState').classList.add('hidden');
+            document.getElementById('progressState').classList.remove('hidden');
             
             // Reset stepper
             updateStepper(1, 0);
             document.getElementById('progressLog').innerHTML = '';
-            addLogEntry('Initializing secure workflow...', 'info');
-
+            addLogEntry('Starting workflow...');
+            
             try {
                 const formData = new FormData();
                 formData.append('topic', topic);
                 formData.append('outputType', outputType);
-                if (document.getElementById('template')) {
-                    formData.append('template', document.getElementById('template').value);
+                
+                const template = document.getElementById('template').value;
+                if (template) formData.append('template', template);
+                
+                const files = document.getElementById('documents').files;
+                for (let file of files) {
+                    formData.append('documents', file);
                 }
                 
-                const fileInput = document.getElementById('documents');
-                if (fileInput.files.length > 0) {
-                    for (let i = 0; i < fileInput.files.length; i++) {
-                        formData.append('documents', fileInput.files[i]);
-                    }
-                }
-
-                // Use fetch with SSE support
                 const response = await fetch('/api/generate', {
                     method: 'POST',
                     body: formData
                 });
                 
-                if (!response.body) {
-                    throw new Error('Streaming not supported');
-                }
+                if (!response.body) throw new Error('Streaming not supported');
                 
                 const reader = response.body.getReader();
                 const decoder = new TextDecoder();
@@ -497,159 +710,119 @@
                             try {
                                 const data = JSON.parse(line.slice(6));
                                 
-                                if (data.error) {
-                                    throw new Error(data.error);
-                                }
-                                
+                                if (data.error) throw new Error(data.error);
                                 if (data.complete) {
                                     finalData = data;
                                     break;
                                 }
                                 
-                                // Update stepper based on step
                                 if (data.step) {
                                     updateStepper(data.step, data.percent);
                                     document.getElementById('taskMessage').textContent = data.message;
+                                    document.getElementById('taskProgress').style.width = data.percent + '%';
                                     document.getElementById('taskPercent').textContent = data.percent + '%';
                                     document.getElementById('currentStepDesc').textContent = data.message;
                                     
-                                    const stepNames = {
-                                        1: 'Document Upload & Vectorization',
-                                        2: 'PubMed Literature Retrieval',
-                                        3: 'RAG Embedding Generation',
-                                        4: 'AI Manuscript Drafting',
-                                        5: 'Visualization Planning',
-                                        6: 'Image Generation (grok-imagine)',
-                                        7: 'Document Finalization'
+                                    const names = {
+                                        1: 'Document upload complete',
+                                        2: 'PubMed data retrieved',
+                                        3: 'Embeddings generated',
+                                        4: 'Manuscript drafted',
+                                        5: 'Visuals planned',
+                                        6: 'Images generated',
+                                        7: 'Document finalized'
                                     };
-                                    if (stepNames[data.step]) {
-                                        addLogEntry(stepNames[data.step] + ' complete', 'success');
-                                    }
+                                    if (names[data.step]) addLogEntry(names[data.step], 'success');
                                 }
                             } catch (e) {
                                 console.error('Parse error:', e);
                             }
                         }
                     }
-                    
                     if (finalData) break;
                 }
                 
-                if (!finalData) {
-                    throw new Error('No data received from server');
-                }
-
-                // Set editable textarea val
-                document.getElementById('manuscriptText').value = finalData.manuscript ? finalData.manuscript.replace(/###/g, '') : "No text generated.";
-
-                const imageContainer = document.getElementById('imageContainer');
-                imageContainer.innerHTML = ''; // clear previous
+                if (!finalData) throw new Error('No data received');
                 
-                if (finalData.imageUrls && finalData.imageUrls.length > 0) {
-                    let htmlAcc = '';
-                    finalData.imageUrls.forEach((imgObj, i) => {
-                        let imgSource = imgObj.url.startsWith('http') ? imgObj.url : 'data:image/png;base64,' + imgObj.url;
-                        htmlAcc += `<div class="mb-4">
-                            <img src="${imgSource}" alt="Figure ${i+1}" class="mx-auto border border-slate-200 shadow-sm w-full h-auto rounded mb-2">
-                            <p class="text-[10px] text-slate-500 font-medium leading-tight px-2">Fig ${i+1}. ${imgObj.prompt}</p>
-                        </div>`;
+                // Show results
+                document.getElementById('manuscriptText').value = finalData.manuscript || '';
+                
+                const imgContainer = document.getElementById('imageContainer');
+                imgContainer.innerHTML = '';
+                
+                if (finalData.imageUrls?.length > 0) {
+                    finalData.imageUrls.forEach((img, i) => {
+                        const src = img.url.startsWith('http') ? img.url : `data:image/png;base64,${img.url}`;
+                        const div = document.createElement('div');
+                        div.className = 'bg-white rounded-xl overflow-hidden shadow-sm';
+                        div.innerHTML = `
+                            <img src="${src}" alt="Figure ${i+1}" class="w-full">
+                            <div class="p-3">
+                                <p class="text-xs text-gray-500 truncate">${img.prompt}</p>
+                            </div>
+                        `;
+                        imgContainer.appendChild(div);
                     });
-                    imageContainer.innerHTML = htmlAcc;
-                    addLogEntry(`Generated ${finalData.imageUrls.length} figures`, 'success');
                 } else {
-                    imageContainer.innerHTML = '<p class="text-xs text-slate-400 italic">No images required for this document type.</p>';
+                    imgContainer.innerHTML = '<p class="text-sm text-gray-400 text-center py-8">No figures required</p>';
                 }
-
-                // Mark all steps complete
+                
                 updateStepper(8, 100);
-                document.getElementById('taskSpinner').className = 'w-8 h-8 flex items-center justify-center text-emerald-500';
-                document.getElementById('taskSpinner').innerHTML = '<i class="fas fa-check-circle text-2xl"></i>';
-                document.getElementById('taskMessage').textContent = 'Document generation complete!';
-                document.getElementById('taskPercent').textContent = '100%';
+                document.getElementById('taskSpinner').innerHTML = '<i class="fas fa-check text-green-500"></i>';
+                document.getElementById('taskMessage').textContent = 'Complete!';
                 
                 setTimeout(() => {
-                    progressState.classList.add('hidden');
-                    resultState.classList.remove('hidden');
-                }, 1000);
+                    document.getElementById('progressState').classList.add('hidden');
+                    document.getElementById('resultState').classList.remove('hidden');
+                    document.getElementById('resultState').classList.add('fade-in');
+                }, 800);
                 
             } catch (error) {
-                console.error("Error:", error);
-                addLogEntry('Error: ' + error.message, 'error');
-                document.getElementById('taskSpinner').className = 'w-8 h-8 flex items-center justify-center text-rose-500';
-                document.getElementById('taskSpinner').innerHTML = '<i class="fas fa-exclamation-circle text-2xl"></i>';
-                document.getElementById('taskMessage').textContent = 'Generation failed: ' + error.message;
-                document.getElementById('taskPercent').textContent = '';
-                alert("System Error: " + error.message);
-                setTimeout(() => {
-                    progressState.classList.add('hidden');
-                    placeholderState.classList.remove('hidden');
-                }, 3000);
+                console.error('Error:', error);
+                addLogEntry(`Error: ${error.message}`, 'error');
+                document.getElementById('taskSpinner').innerHTML = '<i class="fas fa-exclamation text-red-500"></i>';
+                document.getElementById('taskMessage').textContent = 'Generation failed';
+                alert('Error: ' + error.message);
             } finally {
-                btnText.innerText = "Execute Generation";
-                btnText.classList.remove('opacity-50', 'cursor-not-allowed');
-                document.getElementById('generateBtn').disabled = false;
+                btn.disabled = false;
+                btnText.textContent = 'Generate Document';
+                btnIcon.className = 'fas fa-arrow-right text-xs';
             }
         }
-
+        
         function exportToPDF() {
-            // Take the generated content values
-            const textContent = document.getElementById('manuscriptText').value;
-            if (!textContent || textContent === "No text generated.") {
-                alert("Nothing to export yet.");
+            const text = document.getElementById('manuscriptText').value;
+            if (!text) {
+                alert('Nothing to export');
                 return;
             }
-
-            // Create a temporary hidden div structured nicely for the PDF
-            const pdfContainer = document.createElement('div');
-            pdfContainer.style.padding = '40px';
-            pdfContainer.style.fontFamily = 'Georgia, serif';
-            pdfContainer.style.color = '#000';
-            pdfContainer.style.lineHeight = '1.6';
-
-            // Add Header
+            
+            const container = document.createElement('div');
+            container.style.cssText = 'padding: 40px; font-family: Georgia, serif; color: #000; line-height: 1.6;';
+            
             const header = document.createElement('h1');
-            header.innerText = "Medical Affairs Manuscript Draft";
-            header.style.textAlign = "center";
-            header.style.borderBottom = "2px solid #ccc";
-            header.style.paddingBottom = "10px";
-            pdfContainer.appendChild(header);
-
-            // Add Image if exists
-            const imgContainer = document.getElementById('imageContainer');
-            const imgEls = imgContainer.querySelectorAll('img');
-            if (imgEls && imgEls.length > 0) {
-                imgEls.forEach(imgEl => {
-                    const clonedImg = document.createElement('img');
-                    clonedImg.src = imgEl.src;
-                    clonedImg.style.maxWidth = '100%';
-                    clonedImg.style.display = 'block';
-                    clonedImg.style.margin = '20px auto';
-                    pdfContainer.appendChild(clonedImg);
-                });
-            }
-
-            // Add formatted text text
-            const textParagraphs = textContent.split('\n');
-            textParagraphs.forEach(para => {
-                if (para.trim() !== "") {
+            header.textContent = 'Medical Affairs Manuscript';
+            header.style.cssText = 'text-align: center; border-bottom: 2px solid #ccc; padding-bottom: 20px; margin-bottom: 30px;';
+            container.appendChild(header);
+            
+            const imgs = document.getElementById('imageContainer').querySelectorAll('img');
+            imgs.forEach(img => {
+                const clone = document.createElement('img');
+                clone.src = img.src;
+                clone.style.cssText = 'max-width: 100%; display: block; margin: 20px auto;';
+                container.appendChild(clone);
+            });
+            
+            text.split('\n').forEach(para => {
+                if (para.trim()) {
                     const p = document.createElement('p');
-                    p.innerText = para;
+                    p.textContent = para;
                     p.style.marginBottom = '15px';
-                    p.style.fontSize = '12pt';
-                    pdfContainer.appendChild(p);
+                    container.appendChild(p);
                 }
             });
-
-            // Use html2pdf to do the export on the clean container
-            const opt = {
-                margin:       0.5,
-                filename:     'MAMA_Generated_Manuscript.pdf',
-                image:        { type: 'jpeg', quality: 0.98 },
-                html2canvas:  { scale: 2 },
-                jsPDF:        { unit: 'in', format: 'letter', orientation: 'portrait' }
-            };
-
-            html2pdf().set(opt).from(pdfContainer).save();
+            
+            html2pdf().from(container).save('MAMA_Manuscript.pdf');
         }
     </script>
 </body>
