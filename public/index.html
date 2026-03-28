@@ -47,6 +47,8 @@
             100% { transform: rotate(360deg); } 
         }
     </style>
+    <!-- Add html2pdf client library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 </head>
 <body class="min-h-screen flex flex-col">
     <!-- Enterprise Header -->
@@ -134,7 +136,7 @@
                     <div class="flex justify-between items-center mb-4 border-b border-slate-200 pb-4">
                         <h2 class="text-xl font-semibold text-slate-800">Generated Draft</h2>
                         <div class="flex gap-2">
-                            <button class="px-4 py-2 text-sm border border-slate-300 rounded-md text-slate-600 hover:bg-slate-50 font-medium flex items-center gap-2 shadow-sm">
+                            <button onclick="exportToPDF()" class="px-4 py-2 text-sm border border-slate-300 rounded-md text-slate-600 hover:bg-slate-50 font-medium flex items-center gap-2 shadow-sm">
                                 <i class="fas fa-download"></i> Export PDF
                             </button>
                         </div>
@@ -255,6 +257,65 @@
                 btnText.classList.remove('opacity-50', 'cursor-not-allowed');
                 document.getElementById('generateBtn').disabled = false;
             }
+        }
+
+        function exportToPDF() {
+            // Take the generated content values
+            const textContent = document.getElementById('manuscriptText').value;
+            if (!textContent || textContent === "No text generated.") {
+                alert("Nothing to export yet.");
+                return;
+            }
+
+            // Create a temporary hidden div structured nicely for the PDF
+            const pdfContainer = document.createElement('div');
+            pdfContainer.style.padding = '40px';
+            pdfContainer.style.fontFamily = 'Georgia, serif';
+            pdfContainer.style.color = '#000';
+            pdfContainer.style.lineHeight = '1.6';
+
+            // Add Header
+            const header = document.createElement('h1');
+            header.innerText = "Medical Affairs Manuscript Draft";
+            header.style.textAlign = "center";
+            header.style.borderBottom = "2px solid #ccc";
+            header.style.paddingBottom = "10px";
+            pdfContainer.appendChild(header);
+
+            // Add Image if exists
+            const imgContainer = document.getElementById('imageContainer');
+            const imgEl = imgContainer.querySelector('img');
+            if (imgEl) {
+                const clonedImg = document.createElement('img');
+                clonedImg.src = imgEl.src;
+                clonedImg.style.maxWidth = '100%';
+                clonedImg.style.display = 'block';
+                clonedImg.style.margin = '20px auto';
+                pdfContainer.appendChild(clonedImg);
+            }
+
+            // Add formatted text text
+            const textParagraphs = textContent.split('\n');
+            textParagraphs.forEach(para => {
+                if (para.trim() !== "") {
+                    const p = document.createElement('p');
+                    p.innerText = para;
+                    p.style.marginBottom = '15px';
+                    p.style.fontSize = '12pt';
+                    pdfContainer.appendChild(p);
+                }
+            });
+
+            // Use html2pdf to do the export on the clean container
+            const opt = {
+                margin:       0.5,
+                filename:     'MAMA_Generated_Manuscript.pdf',
+                image:        { type: 'jpeg', quality: 0.98 },
+                html2canvas:  { scale: 2 },
+                jsPDF:        { unit: 'in', format: 'letter', orientation: 'portrait' }
+            };
+
+            html2pdf().set(opt).from(pdfContainer).save();
         }
     </script>
 </body>
