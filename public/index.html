@@ -579,10 +579,16 @@
                                         <p class="text-xs text-gray-500">Generated with Gemini 3 Flash</p>
                                     </div>
                                 </div>
-                                <button onclick="exportToPDF()" class="btn-secondary px-4 py-2 text-sm flex items-center gap-2">
-                                    <i class="fas fa-download"></i>
-                                    Export PDF
-                                </button>
+                                <div class="flex items-center gap-2">
+                                    <button onclick="exportToHTML()" class="btn-secondary px-4 py-2 text-sm flex items-center gap-2">
+                                        <i class="fas fa-code"></i>
+                                        Export HTML
+                                    </button>
+                                    <button onclick="exportToPDF()" class="btn-secondary px-4 py-2 text-sm flex items-center gap-2">
+                                        <i class="fas fa-file-pdf"></i>
+                                        Export PDF
+                                    </button>
+                                </div>
                             </div>
                             
                             <!-- Content -->
@@ -593,7 +599,7 @@
                                 </div>
                                 <div class="flex flex-col">
                                     <label class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Generated Figures</label>
-                                    <div id="imageContainer" class="flex-grow overflow-y-auto space-y-4 apple-card p-4" style="max-height: 500px;">
+                                    <div id="imageContainer" class="flex-grow overflow-y-auto space-y-4 apple-card p-4" style="max-height: 600px;">
                                         <p class="text-sm text-gray-400 text-center py-8">No figures generated</p>
                                     </div>
                                 </div>
@@ -812,11 +818,11 @@
                         div.className = 'bg-white rounded-xl overflow-hidden shadow-sm border border-gray-100';
                         div.innerHTML = `
                             <div class="relative">
-                                <img src="${src}" alt="Figure ${i+1}" class="w-full" style="aspect-ratio: 4/3; object-fit: cover;">
+                                <img src="${src}" alt="Figure ${i+1}" class="w-full" style="aspect-ratio: 4/3; object-fit: cover; cursor: pointer;" onclick="window.open('${src}', '_blank')">
                                 <div class="absolute top-3 left-3 bg-blue-500 text-white text-[10px] font-bold px-2 py-1 rounded-full">FIG ${i+1}</div>
                             </div>
-                            <div class="p-3 bg-gray-50">
-                                <p class="text-xs text-gray-600 line-clamp-2">${img.prompt.substring(0, 120)}${img.prompt.length > 120 ? '...' : ''}</p>
+                            <div class="p-4 bg-gray-50">
+                                <p class="text-xs text-gray-600 leading-relaxed">${img.prompt}</p>
                             </div>
                         `;
                         imgContainer.appendChild(div);
@@ -916,6 +922,124 @@
             };
             
             html2pdf().set(opt).from(container).save();
+        }
+
+        function exportToHTML() {
+            const textContainer = document.getElementById('manuscriptText');
+            const textHTML = textContainer.innerHTML;
+            const imgs = document.getElementById('imageContainer').querySelectorAll('img');
+
+            if (!textHTML || textHTML.trim() === '' || textHTML.includes('No text generated')) {
+                alert('Nothing to export');
+                return;
+            }
+
+            // Build images section
+            let imagesHTML = '';
+            if (imgs.length > 0) {
+                imagesHTML = '\n    <div class="images-section">\n        <h2>Figures</h2>';
+                imgs.forEach((img, i) => {
+                    imagesHTML += `\n        <figure>\n            <img src="${img.src}" alt="Figure ${i+1}">\n            <figcaption>Figure ${i+1}</figcaption>\n        </figure>`;
+                });
+                imagesHTML += '\n    </div>';
+            }
+
+            const fullHTML = `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MAMA Generated Manuscript</title>
+    <style>
+        * { box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            line-height: 1.8;
+            color: #1a1a2e;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 40px 20px;
+            background: #fff;
+        }
+        h1 {
+            color: #1a1a2e;
+            font-size: 1.8em;
+            font-weight: 700;
+            margin: 1em 0 0.5em 0;
+            text-align: center;
+            letter-spacing: -0.5px;
+        }
+        h2 {
+            color: #1a365d;
+            font-size: 1.4em;
+            font-weight: 600;
+            margin: 1.5em 0 0.5em 0;
+            border-bottom: 2px solid #007AFF;
+            padding-bottom: 0.3em;
+        }
+        h3 {
+            color: #1a365d;
+            font-size: 1.2em;
+            font-weight: 600;
+            margin: 1.2em 0 0.4em 0;
+        }
+        strong { color: #1a1a2e; font-weight: 600; }
+        em { color: #4a5568; font-style: italic; }
+        p { margin-bottom: 1em; text-align: justify; }
+        ul { margin: 1em 0; padding-left: 1.5em; }
+        li { margin-bottom: 0.4em; }
+        figure { margin: 30px 0; text-align: center; }
+        figcaption { font-size: 12px; color: #666; margin-top: 10px; font-style: italic; }
+        img { max-width: 100%; border: 1px solid #e5e5ea; border-radius: 8px; }
+        .header {
+            text-align: center;
+            border-bottom: 3px solid #007AFF;
+            padding-bottom: 20px;
+            margin-bottom: 30px;
+        }
+        .header h1 {
+            font-size: 28px;
+            margin-bottom: 10px;
+        }
+        .meta {
+            font-size: 14px;
+            color: #666;
+        }
+        .images-section {
+            margin-top: 50px;
+            padding-top: 30px;
+            border-top: 1px solid #e5e5ea;
+        }
+        .images-section h2 {
+            border-bottom: none;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Medical Affairs Manuscript</h1>
+        <p class="meta">Generated by MAMA AI • ${new Date().toLocaleDateString()}</p>
+    </div>
+
+    <main>
+${textHTML}
+    </main>
+    ${imagesHTML}
+</body>
+</html>`;
+
+            // Download
+            const blob = new Blob([fullHTML], { type: 'text/html' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'MAMA_Manuscript.html';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
         }
     </script>
 </body>
