@@ -519,7 +519,19 @@ app.post('/api/generate', upload.array('documents'), async (req, res) => {
     try {
         const { topic, outputType, template } = req.body;
         
+        // Validate required fields
+        if (!topic || topic.trim() === '') {
+            throw new Error('Topic is required');
+        }
+        
+        if (!VENICE_API_KEY || VENICE_API_KEY === '') {
+            throw new Error('VENICE_API_KEY not configured');
+        }
+        
         sendProgress(res, 1, 'Processing uploaded documents...', 10);
+        
+        // Debug logging
+        console.log(`[API] Request received: topic="${topic.substring(0, 50)}...", files=${req.files?.length || 0}, outputType=${outputType || 'manuscript'}`);
         
         // ============================================
         // GRAPH RAG PROCESSING
@@ -528,6 +540,10 @@ app.post('/api/generate', upload.array('documents'), async (req, res) => {
         let citationMap = [];
         
         if (req.files && req.files.length > 0) {
+            console.log(`[GraphRAG] Processing ${req.files.length} uploaded files...`);
+        } else {
+            console.log('[GraphRAG] No documents uploaded, skipping to PubMed research...');
+        }
             console.log(`[GraphRAG] Processing ${req.files.length} documents...`);
             
             // Extract text from all documents - with page preservation for PDFs
@@ -535,48 +551,59 @@ app.post('/api/generate', upload.array('documents'), async (req, res) => {
             const documentsWithPages = []; // Track which docs have page info
             
             for (const file of req.files) {
-                let extractedResult = null;
-                
-                if (file.mimetype === 'application/pdf' || file.originalname.toLowerCase().endsWith('.pdf')) {
-                    sendProgress(res, 1, `Extracting content from ${file.originalname}...`, 12);
-                    extractedResult = await extractPDFContent(file.buffer, { extractTables: true, extractImages: false });
-                    if (!extractedResult || !extractedResult.fullText) {
-                        extractedResult = { fullText: `[Could not extract text from ${file.originalname}]`, pages: null, tables: [], images: [] };
+                try {
+                    let extractedResult = null;
+                    
+                    if (file.mimetype === 'application/pdf' || file.originalname.toLowerCase().endsWith('.pdf')) {
+                        sendProgress(res, 1, `Extracting content from ${file.originalname}...`, 12);
+                        extractedResult = await extractPDFContent(file.buffer, { extractTables: true, extractImages: false });
+                        if (!extractedResult || !extractedResult.fullText) {
+                            extractedResult = { fullText: `[Could not extract text from ${file.originalname}]`, pages: null, tables: [], images: [] };
+                        }
+                    } else {
+                        const text = file.buffer.toString('utf8');
+                        let tables = [];
+                        try {
+                            tables = detectTables(text);
+                        } catch (tableErr) {
+                            console.log(`[Table] Detection failed for ${file.originalname}:`, tableErr.message);
+                        }
+                        extractedResult = { 
+                            fullText: text, 
+                            pages: null, 
+                            tables: tables.map((t, i) => ({
+                                type: 'table',
+                                index: i + 1,
+                                markdown: t.markdown,
+                                summary: `Table ${i + 1}: Contains ${t.rows.length} rows`,
+                                startLine: t.startLine,
+                                endLine: t.endLine
+                            })),
+                            images: [] 
+                        };
                     }
-                } else {
-                    const text = file.buffer.toString('utf8');
-                    const tables = detectTables(text);
-                    extractedResult = { 
-                        fullText: text, 
-                        pages: null, 
-                        tables: tables.map((t, i) => ({
-                            type: 'table',
-                            index: i + 1,
-                            markdown: t.markdown,
-                            summary: `Table ${i + 1}: Contains ${t.rows.length} rows`,
-                            startLine: t.startLine,
-                            endLine: t.endLine
-                        })),
-                        images: [] 
-                    };
-                }
-                
-                if (extractedResult && extractedResult.fullText && extractedResult.fullText.length > 100) {
-                    documents.push({ 
-                        text: extractedResult.fullText, 
-                        source: file.originalname,
-                        pages: extractedResult.pages,
-                        tables: extractedResult.tables || [],
-                        images: extractedResult.images || []
-                    });
-                    if (extractedResult.pages && extractedResult.pages.length > 0) {
-                        documentsWithPages.push(file.originalname);
+                    
+                    if (extractedResult && extractedResult.fullText && extractedResult.fullText.length > 100) {
+                        documents.push({ 
+                            text: extractedResult.fullText, 
+                            source: file.originalname,
+                            pages: extractedResult.pages,
+                            tables: extractedResult.tables || [],
+                            images: extractedResult.images || []
+                        });
+                        if (extractedResult.pages && extractedResult.pages.length > 0) {
+                            documentsWithPages.push(file.originalname);
+                        }
+                        console.log(`[PDF] ${file.originalname}: ${extractedResult.pages?.length || 0} pages, ${extractedResult.tables?.length || 0} tables`);
                     }
-                    console.log(`[PDF] ${file.originalname}: ${extractedResult.pages?.length || 0} pages, ${extractedResult.tables?.length || 0} tables`);
+                } catch (fileErr) {
+                    console.error(`[File] Error processing ${file.originalname}:`, fileErr.message);
+                    // Continue with other files
                 }
             }
             
             if (documents.length > 0) {
+                console.log(`[GraphRAG] Processing ${documents.length} valid documents`);
                 const chunkMode = documentsWithPages.length > 0 ? 'page-based' : 'sliding window';
                 sendProgress(res, 2, `Building Graph RAG: ${chunkMode} chunking ${documents.length} documents...`, 18);
                 
@@ -860,11 +887,18 @@ app.post('/api/generate', upload.array('documents'), async (req, res) => {
         res.end();
 
     } catch (error) {
-        console.error('Venice API Error:', error.response?.data || error.message);
-        res.write(`data: ${JSON.stringify({ error: 'Failed to generate manuscript using Venice AI' })}
+        console.error('[API] Error:', error.message);
+        console.error(error.stack);
+        
+        // Ensure we send a proper error response
+        try {
+            res.write(`data: ${JSON.stringify({ error: error.message || 'Failed to generate manuscript' })}
 
 `);
-        res.end();
+            res.end();
+        } catch (e) {
+            console.error('[API] Failed to send error response:', e.message);
+        }
     }
 });
 
