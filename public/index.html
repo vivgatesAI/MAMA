@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MAMA — Medical Affairs Manuscript AI</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
+    <style>
+        body { font-family: 'Georgia', serif; background: linear-gradient(135deg, #f8f4f0, #ede4d5); }
+        .hero { background: linear-gradient(rgba(58,47,31,0.85), rgba(58,47,31,0.9)), url('https://picsum.photos/id/1015/2000/1200'); background-size: cover; }
+        .card { transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
+        .card:hover { transform: translateY(-8px); box-shadow: 0 25px 50px -12px rgb(0 0 0 / 0.15); }
+        .loader { border: 4px solid rgba(255, 255, 255, 0.3); border-top: 4px solid #fff; border-radius: 50%; width: 24px; height: 24px; animation: spin 1s linear infinite; display: none; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body class="min-h-screen text-[#2c2520]">
+    <div class="hero h-[60vh] flex items-center justify-center text-white text-center">
+        <div class="max-w-3xl px-6">
+            <h1 class="text-6xl font-light tracking-tight mb-4">MAMA</h1>
+            <p class="text-2xl font-light opacity-90">Medical Affairs Manuscript AI</p>
+            <p class="mt-6 text-lg opacity-75">Elegant. Precise. Powered by Gemini 3 Flash Preview & Nano Banana 2.</p>
+        </div>
+    </div>
+
+    <div id="upload" class="max-w-5xl mx-auto px-6 py-12 -mt-24 relative z-10">
+        <div class="card bg-white rounded-3xl shadow-xl p-10">
+            <h2 class="text-3xl font-light mb-8 flex items-center gap-3">
+                <i class="fas fa-microscope text-amber-600"></i> Generate Manuscript
+            </h2>
+            
+            <div class="grid md:grid-cols-2 gap-10">
+                <div>
+                    <label class="block text-sm font-medium mb-2 text-stone-600">Research Topic or Study Title</label>
+                    <textarea id="topic" rows="4" placeholder="Efficacy of Novel Therapy in HER2+ Breast Cancer..." 
+                           class="w-full px-6 py-4 rounded-2xl border border-stone-200 focus:outline-none focus:border-amber-400 text-lg bg-stone-50"></textarea>
+
+                    <div class="mt-8 border-2 border-dashed border-stone-200 rounded-2xl p-8 text-center bg-stone-50 hover:border-amber-400 transition cursor-pointer">
+                        <i class="fas fa-file-pdf text-3xl text-stone-400 mb-2"></i>
+                        <p class="text-sm text-stone-600">Optional: Drop reference PDFs or CSR data</p>
+                        <input type="file" id="documents" multiple class="mt-4 text-xs">
+                    </div>
+                </div>
+
+                <div class="flex flex-col justify-end">
+                    <button id="generateBtn" onclick="generateManuscript()" 
+                            class="w-full bg-[#3a2f1f] hover:bg-black text-white py-5 rounded-2xl text-xl font-light tracking-wide transition flex items-center justify-center gap-3">
+                        <span id="btnText">Synthesize Publication</span>
+                        <div id="loader" class="loader"></div>
+                    </button>
+                    <p class="text-center text-xs text-stone-400 mt-4">
+                        Powered by Gemini 3 Flash Preview & Nano Banana 2 (Venice AI API)
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Output UI Container -->
+        <div id="outputArea" class="hidden mt-12 bg-white rounded-3xl shadow-xl p-12">
+            <h3 class="text-2xl font-light mb-6 border-b border-stone-100 pb-4">Generated Manuscript</h3>
+            
+            <!-- Generated Image -->
+            <div id="imageContainer" class="mb-10 text-center"></div>
+
+            <!-- Generated Text -->
+            <div class="prose max-w-none prose-stone">
+                <p id="manuscriptText" class="whitespace-pre-wrap text-stone-700 leading-relaxed text-lg"></p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        async function generateManuscript() {
+            const btnText = document.getElementById('btnText');
+            const loader = document.getElementById('loader');
+            const outputArea = document.getElementById('outputArea');
+            const topic = document.getElementById('topic').value;
+
+            if (!topic) {
+                alert("Please enter a research topic.");
+                return;
+            }
+
+            // UI loading state
+            btnText.innerText = "Synthesizing...";
+            loader.style.display = "block";
+            outputArea.classList.add('hidden');
+
+            try {
+                // Call our local Node backend which hits Venice API
+                const response = await fetch('/api/generate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ topic: topic })
+                });
+
+                const data = await response.json();
+
+                if (data.error) throw new Error(data.error);
+
+                // Populate Text
+                document.getElementById('manuscriptText').innerText = data.manuscript || "No text generated.";
+
+                // Populate Image
+                const imageContainer = document.getElementById('imageContainer');
+                if (data.imageUrl) {
+                    // Note: If Venice returns base64, syntax handles it. If URL, it uses the URL.
+                    let imgSource = data.imageUrl.startsWith('http') ? data.imageUrl : \`data:image/png;base64,\${data.imageUrl}\`;
+                    imageContainer.innerHTML = \`<img src="\${imgSource}" alt="Generated Data Chart" class="mx-auto rounded-xl shadow-md max-h-[400px]">
+                    <p class="text-xs text-stone-400 mt-2 italic">Figure 1. Generated Visualization</p>\`;
+                }
+
+                outputArea.classList.remove('hidden');
+                
+            } catch (error) {
+                console.error("Error:", error);
+                alert("Generation failed: " + error.message);
+            } finally {
+                btnText.innerText = "Synthesize Publication";
+                loader.style.display = "none";
+            }
+        }
+    </script>
+</body>
+</html>
