@@ -65,7 +65,7 @@ async function createVeniceEmbeddings(documentTextArray) {
 
 app.post('/api/generate', upload.array('documents'), async (req, res) => {
     try {
-        const { topic } = req.body;
+        const { topic, outputType } = req.body;
         
         // 0. Process any uploaded reference documents into RAG setup
         let uploadContext = "";
@@ -88,12 +88,35 @@ app.post('/api/generate', upload.array('documents'), async (req, res) => {
         const literatureContext = await fetchPubMedAbstracts(topic);
         console.log('[API] Literature context retrieved. Starting generation...');
         
+        let systemPrompt = 'You are an elite Medical Affairs AI writer.';
+        let userInstruction = `Please generate the manuscript draft including Introduction, Methodology summary, and Conclusion based on this combined data. Cite the authors in-text.`;
+        
+        switch(outputType) {
+            case 'abstract':
+                systemPrompt += ' Write a concise, highly structured Congress Abstract (Background, Methods, Results, Conclusion). Limit to 300 words.';
+                userInstruction = 'Please generate the structured congress abstract based on this combined data.';
+                break;
+            case 'summary':
+                systemPrompt += ' Write a high-level Executive Summary for internal leadership, highlighting key takeaways and strategic implications.';
+                userInstruction = 'Please generate the executive summary based on this combined data.';
+                break;
+            case 'press':
+                systemPrompt += ' Write a professional Pharmaceutical Press Release announcing these findings to the public and investors in an accessible yet accurate tone.';
+                userInstruction = 'Please generate the press release based on this combined data.';
+                break;
+            case 'manuscript':
+            default:
+                systemPrompt += ' Write a pristine, elegant full scientific manuscript. Synthesize both the PubMed literature and the internal RAG document data provided.';
+                userInstruction = 'Please generate the manuscript draft including Introduction, Methodology summary, and Conclusion based on this combined data. Cite the authors in-text.';
+                break;
+        }
+
         // 2. Generate Manuscript Text using venice api
         const chatResponse = await axios.post('https://api.venice.ai/api/v1/chat/completions', {
-            model: 'gemini-3-flash-preview',
+            model: 'kimi-k2-5',
             messages: [
-                { role: 'system', content: 'You are an elite Medical Affairs AI writer. Write a pristine, elegant scientific manuscript. Synthesize both the PubMed literature and the internal RAG document data provided.' },
-                { role: 'user', content: `Topic: ${topic}\n\n=== RECENT PUBMED LITERATURE EXTRACT ===\n${literatureContext}\n\n=== INTERNAL RAG DOCUMENT CONTEXT ===\n${uploadContext || "No internal documents provided."}\n=====================================\n\nPlease generate the manuscript draft including Introduction, Methodology summary, and Conclusion based on this combined data. Cite the authors in-text.` }
+                { role: 'system', content: systemPrompt },
+                { role: 'user', content: `Topic: ${topic}\n\n=== RECENT PUBMED LITERATURE EXTRACT ===\n${literatureContext}\n\n=== INTERNAL RAG DOCUMENT CONTEXT ===\n${uploadContext || "No internal documents provided."}\n=====================================\n\n${userInstruction}` }
             ]
         }, {
             headers: {
