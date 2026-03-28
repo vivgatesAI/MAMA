@@ -581,13 +581,13 @@ app.post('/api/generate', upload.array('documents'), async (req, res) => {
         let ragContext = "";
         let citationMap = [];
         let uploadContext = "No internal documents provided.";
+        let documents = []; // Declare documents outside the block for later access
         
         // Process documents if mode allows
         if ((mode === 'documents' || mode === 'both') && req.files && req.files.length > 0) {
             console.log(`[GraphRAG] Processing ${req.files.length} uploaded files...`);
             
             // Extract text from all documents - with page preservation for PDFs
-            const documents = [];
             const documentsWithPages = []; // Track which docs have page info
             
             for (const file of req.files) {
@@ -744,16 +744,17 @@ app.post('/api/generate', upload.array('documents'), async (req, res) => {
                         const chunkEmbeds = await createVeniceEmbeddings(chunkTextsForEmbed);
                         
                         if (chunkEmbeds) {
-                            for (let i = 0; i < chunkDocs.length; i++) {
-                                chunkDocs[i].embedding = chunkEmbeds[i];
+                            for (let i = 0; i < chunkDocs.length && i < chunkEmbeds.length; i++) {
+                                // Extract the actual embedding vector from Venice response
+                                chunkDocs[i].embeddingVector = chunkEmbeds[i].embedding;
                             }
                         }
                     }
                     
-                    // Build the graph
+                    // Build the graph - pass the vectors directly
                     for (const chunkDoc of chunkDocs) {
-                        if (chunkDoc.embedding) {
-                            await graphRAG.addDocuments([chunkDoc], [chunkDoc.embedding], sendProgress.bind(null, res));
+                        if (chunkDoc.embeddingVector) {
+                            await graphRAG.addDocuments([chunkDoc], [chunkDoc.embeddingVector], sendProgress.bind(null, res));
                         }
                     }
                     
@@ -797,9 +798,15 @@ app.post('/api/generate', upload.array('documents'), async (req, res) => {
         if (graphRAG.chunks.length > 0 && topicEmbedding) {
             sendProgress(res, 3, 'Retrieving relevant passages via Graph RAG...', 32);
             const relevantChunks = await graphRAG.retrieve(topic, topicEmbedding, 8);
-            ragContext = graphRAG.formatContext(relevantChunks);
-            citationMap = graphRAG.getCitationMap(relevantChunks);
-            console.log(`[GraphRAG] Retrieved ${relevantChunks.length} relevant chunks`);
+            if (relevantChunks && relevantChunks.length > 0) {
+                ragContext = graphRAG.formatContext(relevantChunks);
+                citationMap = graphRAG.getCitationMap(relevantChunks);
+                console.log(`[GraphRAG] Retrieved ${relevantChunks.length} relevant chunks`);
+            } else {
+                console.log('[GraphRAG] No relevant chunks found, will use fallback');
+            }
+        } else {
+            console.log(`[GraphRAG] Cannot retrieve: ${graphRAG.chunks.length} chunks in graph, topicEmbedding=${!!topicEmbedding}`);
         }
         
         // Adjust instructions based on research mode
@@ -843,10 +850,21 @@ app.post('/api/generate', upload.array('documents'), async (req, res) => {
 
         sendProgress(res, 4, `Drafting ${outputType || 'manuscript'} with Graph RAG citations...`, 45);
         
-        // Build the context section
-        const contextSection = ragContext 
-            ? `=== RELEVANT DOCUMENT EXCERPTS (via Graph RAG) ===\n${ragContext}\n\n[Sources identified through semantic similarity + entity graph traversal]`
-            : uploadContext || "No internal documents provided.";
+        // Build the context section - use RAG if available, otherwise fall back to raw document text
+        let contextSection = '';
+        
+        if (ragContext && ragContext.length > 0) {
+            contextSection = `=== RELEVANT DOCUMENT EXCERPTS (via Graph RAG) ===\n${ragContext}\n\n[Sources identified through semantic similarity + entity graph traversal]`;
+        } else if (documents && documents.length > 0) {
+            // Fallback: include raw document text if RAG failed
+            console.log('[RAG] Using fallback: including raw document text');
+            const docTexts = documents.map((doc, i) => 
+                `[Source ${i + 1}: ${doc.source}]\n${doc.text.substring(0, 3000)}${doc.text.length > 3000 ? '...' : ''}`
+            ).join('\n\n---\n\n');
+            contextSection = `=== UPLOADED DOCUMENTS ===\n${docTexts}`;
+        } else {
+            contextSection = "No internal documents provided.";
+        }
         
         // 2. Generate Manuscript Text using venice api
         const chatResponse = await axios.post('https://api.venice.ai/api/v1/chat/completions', {
