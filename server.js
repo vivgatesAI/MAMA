@@ -4,8 +4,11 @@ const axios = require('axios');
 const dotenv = require('dotenv');
 const path = require('path');
 const pdfParse = require('pdf-parse');
-const { fromBuffer } = require('pdf2pic');
-const sharp = require('sharp');
+
+// Optional dependencies - gracefully handle if not installed
+let pdf2pic, sharp;
+try { pdf2pic = require('pdf2pic'); } catch (e) { console.log('[PDF] pdf2pic not available'); }
+try { sharp = require('sharp'); } catch (e) { console.log('[Image] sharp not available'); }
 
 dotenv.config();
 
@@ -290,6 +293,8 @@ class GraphRAG {
 // Global GraphRAG instance (in-memory)
 const graphRAG = new GraphRAG();
 
+
+
 // ============================================
 // TABLE DETECTION FROM TEXT
 // ============================================
@@ -392,47 +397,6 @@ function tableToMarkdown(table) {
     }
     
     return md + '\n';
-}
-
-// ============================================
-// IMAGE EXTRACTION & AI CAPTIONING
-// ============================================
-
-async function analyzeImageWithAI(base64Image, context = '') {
-    try {
-        // Use Venice's vision-capable model to describe the image
-        const response = await axios.post('https://api.venice.ai/api/v1/chat/completions', {
-            model: 'gemini-3-flash-preview', // Vision-capable model
-            messages: [
-                {
-                    role: 'user',
-                    content: [
-                        {
-                            type: 'text',
-                            text: `Describe this medical/scientific image in detail. Include: (1) What type of visualization it is (chart, diagram, microscopy, etc.), (2) Key data points or findings shown, (3) Any labels, axes, or legends and their values, (4) The main conclusion or message. Context: ${context}`
-                        },
-                        {
-                            type: 'image_url',
-                            image_url: {
-                                url: `data:image/png;base64,${base64Image}`
-                            }
-                        }
-                    ]
-                }
-            ],
-            max_tokens: 500
-        }, {
-            headers: {
-                'Authorization': `Bearer ${VENICE_API_KEY}`,
-                'Content-Type': 'application/json'
-            }
-        });
-        
-        return response.data.choices[0].message.content;
-    } catch (e) {
-        console.error('[Image] Error analyzing image:', e.message);
-        return '[Image analysis failed]';
-    }
 }
 
 // ============================================
