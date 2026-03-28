@@ -453,13 +453,40 @@ async function extractPDFContent(buffer, options = { extractTables: true, extrac
 }
 
 // Helper function to fetch real clinical literature from PubMed
-async function fetchPubMedAbstracts(topic) {
+async function fetchPubMedAbstracts(topic, documentTexts = []) {
     try {
         console.log(`[PubMed] Searching for: ${topic}`);
         
-        // Build boolean search query
+        // Extract key terms from documents if provided
+        let docTerms = [];
+        if (documentTexts && documentTexts.length > 0) {
+            console.log(`[PubMed] Analyzing ${documentTexts.length} documents for key terms...`);
+            const combinedDocText = documentTexts.join(' ').substring(0, 5000);
+            
+            // Extract potential medical terms (drugs, diseases, genes, etc.)
+            const drugMatches = combinedDocText.match(/\b([A-Z][a-z]+(?:\s[A-Z][a-z]+)*(?:\s+(?:inhibitor|agonist|antagonist|therapy|drug)))/gi) || [];
+            const diseaseMatches = combinedDocText.match(/\b([A-Z][a-z]+(?:\s[A-Z][a-z]+)*(?:\s+disease|disorder|syndrome|cancer))/gi) || [];
+            const geneMatches = combinedDocText.match(/\b([A-Z]{2,}[0-9]*)\s*gene\b/gi) || [];
+            const proteinMatches = combinedDocText.match(/\b([A-Z][a-z]+(?:\s[A-Z][a-z]+)*)\s*protein\b/gi) || [];
+            
+            docTerms = [...new Set([...drugMatches, ...diseaseMatches, ...geneMatches, ...proteinMatches])]
+                .filter(t => t.length > 3)
+                .slice(0, 10); // Limit to top 10 unique terms
+            
+            console.log(`[PubMed] Extracted ${docTerms.length} key terms from documents: ${docTerms.slice(0, 5).join(', ')}${docTerms.length > 5 ? '...' : ''}`);
+        }
+        
+        // Build boolean search query combining topic + document terms
         const searchTerms = topic.toLowerCase().split(/\s+/).filter(t => t.length > 2);
-        const booleanQuery = searchTerms.map(t => `${t}[Title/Abstract]`).join(' AND ');
+        let booleanQuery = searchTerms.map(t => `${t}[Title/Abstract]`).join(' AND ');
+        
+        // Add document terms if available
+        if (docTerms.length > 0) {
+            const docTermsQuery = docTerms.map(t => `${t}[Title/Abstract]`).join(' OR ');
+            booleanQuery = `(${booleanQuery}) AND (${docTermsQuery})`;
+        }
+        
+        console.log(`[PubMed] Boolean query: ${booleanQuery.substring(0, 150)}...`);
         
         // 1. Search for up to 23 article IDs
         const searchUrl = `https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed&term=${encodeURIComponent(booleanQuery)}&retmode=json&retmax=23&sort=relevance`;
@@ -783,7 +810,9 @@ app.post('/api/generate', upload.array('documents'), async (req, res) => {
                 console.log('[RAG] Could not get topic embedding, using fallback');
             }
             
-            pubMedData = await fetchPubMedAbstracts(topic);
+            // Pass document texts to enrich PubMed search
+            const docTextsForSearch = documents.map(d => d.text).filter(t => t && t.length > 100);
+            pubMedData = await fetchPubMedAbstracts(topic, docTextsForSearch);
             console.log(`[API] Literature context retrieved: ${pubMedData.articles?.length || 0} articles`);
         } else {
             console.log('[API] PubMed research skipped (documents-only mode)');
