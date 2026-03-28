@@ -4,6 +4,8 @@ const axios = require('axios');
 const dotenv = require('dotenv');
 const path = require('path');
 const pdfParse = require('pdf-parse');
+const { fromBuffer } = require('pdf2pic');
+const sharp = require('sharp');
 
 dotenv.config();
 
