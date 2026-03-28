@@ -176,11 +176,13 @@ app.post('/api/generate', upload.array('documents'), async (req, res) => {
 
         // 3. Dynamically determine how many images are needed and generate their prompts
         let imagePrompts = [];
+        const SCIENTIFIC_STYLE = "Professional scientific illustration style, clean vector-like aesthetic, white/light gray background, medical journal quality, consistent color palette: deep blue (#1a365d), teal (#38b2ac), soft coral (#ff6b6b), muted gold (#d4a574), lavender (#9f7aea). Minimalist design with clear labels, subtle gradients, 3D rendered appearance but not photorealistic, diagrammatic clarity, NIH/NEJM publication style.";
+        
         try {
             const promptDetermineResponse = await axios.post('https://api.venice.ai/api/v1/chat/completions', {
                 model: 'gemini-3-flash-preview',
                 messages: [
-                    { role: 'system', content: 'You are an AI that decides what scientific charts or images are needed for a medical document. Output ONLY a valid JSON array of strings, where each string is a detailed image generation prompt designed for "grok-imagine". Generate between 0 and 5 prompts depending on what is appropriate for the document type (e.g. 0 for abstracts, 5 for full manuscripts). Return ONLY JSON, no markdown formatting.' },
+                    { role: 'system', content: `You are an AI that decides what scientific charts or images are needed for a medical document. Output ONLY a valid JSON array of strings, where each string is a detailed image generation prompt. Each prompt should describe a specific scientific visualization needed (diagram, mechanism illustration, data chart, etc.). Generate between 0 and 5 prompts depending on document type. All prompts must include: "${SCIENTIFIC_STYLE}" Return ONLY JSON array, no markdown formatting.` },
                     { role: 'user', content: `Document Type: ${outputType}\n\nManuscript content:\n${manuscriptText.substring(0, 2000)}\n\nDetermine the visuals needed and provide the JSON array of prompts.` }
                 ]
             }, {
@@ -194,10 +196,19 @@ app.post('/api/generate', upload.array('documents'), async (req, res) => {
             imagePrompts = JSON.parse(jsonString);
             if (!Array.isArray(imagePrompts)) imagePrompts = [];
             if (imagePrompts.length > 10) imagePrompts = imagePrompts.slice(0, 10);
+            
+            // Ensure consistent styling in all prompts
+            imagePrompts = imagePrompts.map(prompt => {
+                if (!prompt.toLowerCase().includes('scientific illustration')) {
+                    return `${prompt}. ${SCIENTIFIC_STYLE}`;
+                }
+                return prompt;
+            });
+            
             console.log(`[Images] Determined we need ${imagePrompts.length} images.`);
         } catch (e) {
             console.error('[Images] Failed to determine image prompts, falling back to 1 default.', e.message);
-            imagePrompts = [`A clean, professional scientific data visualization for a medical journal, minimalist style, white background. Topic: ${topic}`];
+            imagePrompts = [`Professional scientific illustration showing ${topic}, clean vector-like aesthetic with deep blue (#1a365d), teal (#38b2ac), soft coral (#ff6b6b), muted gold (#d4a574), and lavender (#9f7aea) color palette, white background, medical journal quality, minimalist diagrammatic style.`];
         }
 
         let imageUrls = [];
