@@ -61,6 +61,40 @@ class GraphRAG {
         
         return chunks.filter(c => c.trim().length > 50);
     }
+    
+    // Page-by-page chunking - each page becomes a chunk
+    chunkByPages(pages, maxChunkSize = 4000) {
+        const chunks = [];
+        
+        for (let i = 0; i < pages.length; i++) {
+            const pageText = pages[i].trim();
+            
+            // Skip near-empty pages
+            if (pageText.length < 50) continue;
+            
+            // If page is very long, split it but maintain page metadata
+            if (pageText.length > maxChunkSize) {
+                const subChunks = this.chunkText(pageText, maxChunkSize, 200);
+                subChunks.forEach((subChunk, idx) => {
+                    chunks.push({
+                        text: subChunk,
+                        pageNumber: i + 1,
+                        isPartial: subChunks.length > 1,
+                        partialIndex: idx + 1,
+                        totalPartials: subChunks.length
+                    });
+                });
+            } else {
+                chunks.push({
+                    text: pageText,
+                    pageNumber: i + 1,
+                    isPartial: false
+                });
+            }
+        }
+        
+        return chunks;
+    }
 
     // Extract entities from text using simple patterns + AI for key entities
     async extractEntities(text, chunkId, sourceFile) {
@@ -229,32 +263,79 @@ class GraphRAG {
 
     // Generate citation context
     formatContext(results) {
-        return results.map((r, i) => 
-            `[Source ${i + 1}: ${r.chunk.source}]\n${r.chunk.text.substring(0, 800)}...\n(Entities: ${r.chunk.entities.slice(0, 5).join(', ') || 'none'})`
-        ).join('\n\n---\n\n');
+        return results.map((r, i) => {
+            const pageInfo = r.chunk.pageNumber ? ` (Page ${r.chunk.pageNumber})` : '';
+            return `[Source ${i + 1}: ${r.chunk.source}${pageInfo}]\n${r.chunk.text.substring(0, 800)}...\n(Entities: ${r.chunk.entities.slice(0, 5).join(', ') || 'none'})`;
+        }).join('\n\n---\n\n');
     }
 
     // Get citation map for the response
     getCitationMap(results) {
-        return results.map(r => ({
-            source: r.chunk.source,
-            entities: r.chunk.entities.slice(0, 3),
-            relevance: Math.round(r.score * 100) / 100
-        }));
+        return results.map(r => {
+            const citation = {
+                source: r.chunk.source,
+                entities: r.chunk.entities.slice(0, 3),
+                relevance: Math.round(r.score * 100) / 100
+            };
+            if (r.chunk.pageNumber) {
+                citation.page = r.chunk.pageNumber;
+            }
+            return citation;
+        });
     }
 }
 
 // Global GraphRAG instance (in-memory)
 const graphRAG = new GraphRAG();
 
-// Helper to extract text from PDF buffers
-async function extractPDFText(buffer) {
+// Helper to extract text from PDF buffers - with page preservation
+async function extractPDFText(buffer, preservePages = true) {
     try {
         const data = await pdfParse(buffer);
-        return data.text.substring(0, 10000); // Limit to first 10k chars
+        
+        if (!preservePages) {
+            return { fullText: data.text.substring(0, 10000), pages: null };
+        }
+        
+        // Try to split by form feed (page break character)
+        let pages = data.text.split('\f').filter(p => p.trim().length > 0);
+        
+        // If no form feeds found, estimate pages based on average page size
+        // A typical PDF page has ~3000-5000 characters
+        if (pages.length === 1 && data.text.length > 8000) {
+            const estimatedCharsPerPage = 4500;
+            const estimatedPages = Math.ceil(data.text.length / estimatedCharsPerPage);
+            pages = [];
+            
+            for (let i = 0; i < estimatedPages; i++) {
+                const start = i * estimatedCharsPerPage;
+                const end = Math.min((i + 1) * estimatedCharsPerPage, data.text.length);
+                const pageText = data.text.substring(start, end);
+                
+                // Try to break at paragraph boundary
+                const lastPara = pageText.lastIndexOf('\n\n');
+                if (lastPara > estimatedCharsPerPage * 0.8 && i < estimatedPages - 1) {
+                    pages.push(data.text.substring(start, start + lastPara));
+                    // Adjust next page start
+                    i--; // Re-process remaining with adjusted start
+                    data.text = data.text.substring(0, start) + data.text.substring(start + lastPara).trim();
+                } else {
+                    pages.push(pageText);
+                }
+            }
+        }
+        
+        // Clean up pages
+        pages = pages.map(p => p.trim()).filter(p => p.length > 100);
+        
+        console.log(`[PDF] Extracted ${pages.length} pages`);
+        return { 
+            fullText: data.text.substring(0, 10000), 
+            pages: pages 
+        };
     } catch (e) {
         console.error('[PDF] Error parsing PDF:', e.message);
-        return null;
+        return { fullText: null, pages: null };
     }
 }
 
@@ -336,38 +417,68 @@ app.post('/api/generate', upload.array('documents'), async (req, res) => {
         if (req.files && req.files.length > 0) {
             console.log(`[GraphRAG] Processing ${req.files.length} documents...`);
             
-            // Extract text from all documents
+            // Extract text from all documents - with page preservation for PDFs
             const documents = [];
+            const documentsWithPages = []; // Track which docs have page info
+            
             for (const file of req.files) {
-                let extractedText = '';
+                let extractedResult = null;
                 
                 if (file.mimetype === 'application/pdf' || file.originalname.toLowerCase().endsWith('.pdf')) {
-                    sendProgress(res, 1, `Extracting text from ${file.originalname}...`, 12);
-                    extractedText = await extractPDFText(file.buffer);
-                    if (!extractedText) {
-                        extractedText = `[Could not extract text from ${file.originalname}]`;
+                    sendProgress(res, 1, `Extracting pages from ${file.originalname}...`, 12);
+                    extractedResult = await extractPDFText(file.buffer, true); // preservePages = true
+                    if (!extractedResult || !extractedResult.fullText) {
+                        extractedResult = { fullText: `[Could not extract text from ${file.originalname}]`, pages: null };
                     }
                 } else {
-                    extractedText = file.buffer.toString('utf8');
+                    const text = file.buffer.toString('utf8');
+                    extractedResult = { fullText: text, pages: null };
                 }
                 
-                if (extractedText && extractedText.length > 100) {
-                    documents.push({ text: extractedText, source: file.originalname });
+                if (extractedResult && extractedResult.fullText && extractedResult.fullText.length > 100) {
+                    documents.push({ 
+                        text: extractedResult.fullText, 
+                        source: file.originalname,
+                        pages: extractedResult.pages 
+                    });
+                    if (extractedResult.pages && extractedResult.pages.length > 0) {
+                        documentsWithPages.push(file.originalname);
+                    }
                 }
             }
             
             if (documents.length > 0) {
-                sendProgress(res, 2, `Building Graph RAG: chunking ${documents.length} documents...`, 18);
+                const chunkMode = documentsWithPages.length > 0 ? 'page-based' : 'sliding window';
+                sendProgress(res, 2, `Building Graph RAG: ${chunkMode} chunking ${documents.length} documents...`, 18);
                 
                 // Generate embeddings for all chunks
-                const allChunks = [];
+                const allChunkDocs = [];
+                
                 for (const doc of documents) {
-                    const chunks = graphRAG.chunkText(doc.text);
-                    chunks.forEach(chunk => allChunks.push({ text: chunk, source: doc.source }));
+                    if (doc.pages && doc.pages.length > 0) {
+                        // Use page-based chunking for PDFs
+                        const pageChunks = graphRAG.chunkByPages(doc.pages, 4000);
+                        for (const pageChunk of pageChunks) {
+                            allChunkDocs.push({
+                                text: pageChunk.text,
+                                source: doc.source,
+                                pageNumber: pageChunk.pageNumber,
+                                isPartial: pageChunk.isPartial
+                            });
+                        }
+                    } else {
+                        // Fall back to sliding window for non-PDF files
+                        const chunks = graphRAG.chunkText(doc.text);
+                        chunks.forEach((chunk, idx) => allChunkDocs.push({ 
+                            text: chunk, 
+                            source: doc.source,
+                            chunkIndex: idx
+                        }));
+                    }
                 }
                 
-                sendProgress(res, 2, `Embedding ${allChunks.length} chunks with Venice AI...`, 22);
-                const chunkTexts = allChunks.map(c => c.text);
+                sendProgress(res, 2, `Embedding ${allChunkDocs.length} chunks with Venice AI...`, 22);
+                const chunkTexts = allChunkDocs.map(c => c.text);
                 const embeddings = await createVeniceEmbeddings(chunkTexts);
                 
                 if (embeddings) {
@@ -378,22 +489,20 @@ app.post('/api/generate', upload.array('documents'), async (req, res) => {
                     graphRAG.entities = new Map();
                     graphRAG.relationships = [];
                     
-                    // Add documents with embeddings
-                    const docsWithEmbeds = documents.map((doc, i) => ({
-                        text: doc.text,
-                        source: doc.source,
-                        embedding: embeddings[i] // Use document-level embedding for now
-                    }));
-                    
-                    // Re-chunk and embed at chunk level
+                    // Build chunk documents with embeddings
                     const chunkDocs = [];
-                    const chunkEmbeddings = [];
-                    
-                    for (const doc of documents) {
-                        const chunks = graphRAG.chunkText(doc.text);
-                        for (const chunk of chunks) {
-                            chunkDocs.push({ text: chunk, source: doc.source });
+                    for (let i = 0; i < allChunkDocs.length; i++) {
+                        const chunkInfo = allChunkDocs[i];
+                        // Build source label with page info if available
+                        let sourceLabel = chunkInfo.source;
+                        if (chunkInfo.pageNumber) {
+                            sourceLabel = `${chunkInfo.source} (Page ${chunkInfo.pageNumber}${chunkInfo.isPartial ? ` Part ${chunkInfo.partialIndex}/${chunkInfo.totalPartials}` : ''})`;
                         }
+                        
+                        chunkDocs.push({
+                            text: chunkInfo.text,
+                            source: sourceLabel
+                        });
                     }
                     
                     // Get embeddings for all chunks
@@ -569,9 +678,13 @@ app.post('/api/generate', upload.array('documents'), async (req, res) => {
         let referencesSection = '';
         if (citationMap.length > 0) {
             const uniqueSources = [...new Set(citationMap.map(c => c.source))];
-            referencesSection = '\n\n## References\n\n' + uniqueSources.map((s, i) => 
-                `[${i + 1}] ${s} - Relevance: ${Math.round(citationMap.filter(c => c.source === s).reduce((a, b) => a + b.relevance, 0) / citationMap.filter(c => c.source === s).length * 100)}%`
-            ).join('\n');
+            referencesSection = '\n\n## References\n\n' + uniqueSources.map((s, i) => {
+                const citationsForSource = citationMap.filter(c => c.source === s);
+                const avgRelevance = Math.round(citationsForSource.reduce((a, b) => a + b.relevance, 0) / citationsForSource.length * 100);
+                const pages = [...new Set(citationsForSource.map(c => c.page).filter(Boolean))];
+                const pageStr = pages.length > 0 ? ` (Pages: ${pages.join(', ')})` : '';
+                return `[${i + 1}] ${s}${pageStr} - Relevance: ${avgRelevance}%`;
+            }).join('\n');
         }
         
         // Send final data and close SSE stream
