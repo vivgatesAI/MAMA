@@ -288,54 +288,201 @@ class GraphRAG {
 // Global GraphRAG instance (in-memory)
 const graphRAG = new GraphRAG();
 
-// Helper to extract text from PDF buffers - with page preservation
-async function extractPDFText(buffer, preservePages = true) {
+// ============================================
+// TABLE DETECTION FROM TEXT
+// ============================================
+
+function detectTables(text) {
+    const tables = [];
+    const lines = text.split('\n');
+    let currentTable = null;
+    let tableStartIndex = -1;
+    
+    for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        
+        // Check if line looks like a table row (multiple columns)
+        // Patterns: tab-separated, 3+ spaces between content, pipe-delimited
+        const hasMultipleColumns = 
+            (line.match(/\t/g) || []).length >= 2 ||
+            (line.match(/\s{3,}/g) || []).length >= 2 ||
+            line.includes('|') && line.split('|').filter(s => s.trim()).length >= 3;
+        
+        // Check for header separator line (---- or ====)
+        const isSeparator = /^[\s\-=_+]+$/.test(line) && line.length > 10;
+        
+        if (hasMultipleColumns || isSeparator) {
+            if (!currentTable) {
+                currentTable = {
+                    headers: [],
+                    rows: [],
+                    startLine: i
+                };
+                tableStartIndex = i;
+            }
+            
+            if (isSeparator) {
+                // This is a separator line - previous line might be headers
+                if (i > 0 && currentTable.rows.length === 0) {
+                    const prevLine = lines[i - 1];
+                    currentTable.headers = parseTableRow(prevLine);
+                }
+            } else {
+                const cells = parseTableRow(line);
+                if (cells.length >= 2) {
+                    currentTable.rows.push(cells);
+                }
+            }
+        } else {
+            // End of table
+            if (currentTable && currentTable.rows.length > 0) {
+                tables.push({
+                    ...currentTable,
+                    endLine: i - 1,
+                    markdown: tableToMarkdown(currentTable)
+                });
+                currentTable = null;
+            }
+        }
+    }
+    
+    // Handle table at end of document
+    if (currentTable && currentTable.rows.length > 0) {
+        tables.push({
+            ...currentTable,
+            endLine: lines.length - 1,
+            markdown: tableToMarkdown(currentTable)
+        });
+    }
+    
+    return tables;
+}
+
+function parseTableRow(line) {
+    // Try different delimiters
+    if (line.includes('|')) {
+        return line.split('|').map(s => s.trim()).filter(s => s);
+    }
+    if (line.includes('\t')) {
+        return line.split('\t').map(s => s.trim()).filter(s => s);
+    }
+    // Split by 3+ spaces
+    return line.split(/\s{3,}/).map(s => s.trim()).filter(s => s);
+}
+
+function tableToMarkdown(table) {
+    if (table.rows.length === 0) return '';
+    
+    let md = '\n## Table\n\n';
+    
+    // Use detected headers or generic ones
+    const headers = table.headers.length > 0 ? table.headers : 
+        table.rows[0].map((_, i) => `Column ${i + 1}`);
+    
+    // Add header
+    md += '| ' + headers.join(' | ') + ' |\n';
+    md += '|' + headers.map(() => ' --- ').join('|') + '|\n';
+    
+    // Add rows (skip first if it was used as headers)
+    const dataRows = table.headers.length > 0 ? table.rows : table.rows.slice(1);
+    for (const row of dataRows) {
+        md += '| ' + row.join(' | ') + ' |\n';
+    }
+    
+    return md + '\n';
+}
+
+// ============================================
+// IMAGE EXTRACTION & AI CAPTIONING
+// ============================================
+
+async function analyzeImageWithAI(base64Image, context = '') {
+    try {
+        // Use Venice's vision-capable model to describe the image
+        const response = await axios.post('https://api.venice.ai/api/v1/chat/completions', {
+            model: 'gemini-3-flash-preview', // Vision-capable model
+            messages: [
+                {
+                    role: 'user',
+                    content: [
+                        {
+                            type: 'text',
+                            text: `Describe this medical/scientific image in detail. Include: (1) What type of visualization it is (chart, diagram, microscopy, etc.), (2) Key data points or findings shown, (3) Any labels, axes, or legends and their values, (4) The main conclusion or message. Context: ${context}`
+                        },
+                        {
+                            type: 'image_url',
+                            image_url: {
+                                url: `data:image/png;base64,${base64Image}`
+                            }
+                        }
+                    ]
+                }
+            ],
+            max_tokens: 500
+        }, {
+            headers: {
+                'Authorization': `Bearer ${VENICE_API_KEY}`,
+                'Content-Type': 'application/json'
+            }
+        });
+        
+        return response.data.choices[0].message.content;
+    } catch (e) {
+        console.error('[Image] Error analyzing image:', e.message);
+        return '[Image analysis failed]';
+    }
+}
+
+// ============================================
+// ENHANCED PDF EXTRACTION
+// ============================================
+
+async function extractPDFContent(buffer, options = { extractTables: true, extractImages: false }) {
     try {
         const data = await pdfParse(buffer);
+        const fullText = data.text;
         
-        if (!preservePages) {
-            return { fullText: data.text.substring(0, 10000), pages: null };
-        }
-        
-        // Try to split by form feed (page break character)
+        // Extract pages
         let pages = data.text.split('\f').filter(p => p.trim().length > 0);
         
-        // If no form feeds found, estimate pages based on average page size
-        // A typical PDF page has ~3000-5000 characters
+        // Estimate pages if no form feeds
         if (pages.length === 1 && data.text.length > 8000) {
             const estimatedCharsPerPage = 4500;
             const estimatedPages = Math.ceil(data.text.length / estimatedCharsPerPage);
             pages = [];
-            
             for (let i = 0; i < estimatedPages; i++) {
                 const start = i * estimatedCharsPerPage;
                 const end = Math.min((i + 1) * estimatedCharsPerPage, data.text.length);
-                const pageText = data.text.substring(start, end);
-                
-                // Try to break at paragraph boundary
-                const lastPara = pageText.lastIndexOf('\n\n');
-                if (lastPara > estimatedCharsPerPage * 0.8 && i < estimatedPages - 1) {
-                    pages.push(data.text.substring(start, start + lastPara));
-                    // Adjust next page start
-                    i--; // Re-process remaining with adjusted start
-                    data.text = data.text.substring(0, start) + data.text.substring(start + lastPara).trim();
-                } else {
-                    pages.push(pageText);
-                }
+                pages.push(data.text.substring(start, end));
             }
         }
         
-        // Clean up pages
         pages = pages.map(p => p.trim()).filter(p => p.length > 100);
         
-        console.log(`[PDF] Extracted ${pages.length} pages`);
-        return { 
-            fullText: data.text.substring(0, 10000), 
-            pages: pages 
+        // Detect tables
+        const tables = options.extractTables ? detectTables(data.text) : [];
+        console.log(`[PDF] Detected ${tables.length} tables`);
+        
+        // Create table summaries for embedding
+        const tableSummaries = tables.map((table, i) => ({
+            type: 'table',
+            index: i + 1,
+            markdown: table.markdown,
+            summary: `Table ${i + 1}: Contains ${table.rows.length} rows and ${table.headers.length || table.rows[0]?.length || 0} columns. ` +
+                    `Data includes: ${table.rows.slice(0, 3).map(r => r.join(', ')).join('; ')}${table.rows.length > 3 ? '...' : ''}`,
+            startLine: table.startLine,
+            endLine: table.endLine
+        }));
+        
+        return {
+            fullText: data.text.substring(0, 10000),
+            pages: pages,
+            tables: tableSummaries,
+            images: [] // Would be populated if extractImages is true
         };
     } catch (e) {
         console.error('[PDF] Error parsing PDF:', e.message);
-        return { fullText: null, pages: null };
+        return { fullText: null, pages: null, tables: [], images: [] };
     }
 }
 
@@ -425,25 +572,41 @@ app.post('/api/generate', upload.array('documents'), async (req, res) => {
                 let extractedResult = null;
                 
                 if (file.mimetype === 'application/pdf' || file.originalname.toLowerCase().endsWith('.pdf')) {
-                    sendProgress(res, 1, `Extracting pages from ${file.originalname}...`, 12);
-                    extractedResult = await extractPDFText(file.buffer, true); // preservePages = true
+                    sendProgress(res, 1, `Extracting content from ${file.originalname}...`, 12);
+                    extractedResult = await extractPDFContent(file.buffer, { extractTables: true, extractImages: false });
                     if (!extractedResult || !extractedResult.fullText) {
-                        extractedResult = { fullText: `[Could not extract text from ${file.originalname}]`, pages: null };
+                        extractedResult = { fullText: `[Could not extract text from ${file.originalname}]`, pages: null, tables: [], images: [] };
                     }
                 } else {
                     const text = file.buffer.toString('utf8');
-                    extractedResult = { fullText: text, pages: null };
+                    const tables = detectTables(text);
+                    extractedResult = { 
+                        fullText: text, 
+                        pages: null, 
+                        tables: tables.map((t, i) => ({
+                            type: 'table',
+                            index: i + 1,
+                            markdown: t.markdown,
+                            summary: `Table ${i + 1}: Contains ${t.rows.length} rows`,
+                            startLine: t.startLine,
+                            endLine: t.endLine
+                        })),
+                        images: [] 
+                    };
                 }
                 
                 if (extractedResult && extractedResult.fullText && extractedResult.fullText.length > 100) {
                     documents.push({ 
                         text: extractedResult.fullText, 
                         source: file.originalname,
-                        pages: extractedResult.pages 
+                        pages: extractedResult.pages,
+                        tables: extractedResult.tables || [],
+                        images: extractedResult.images || []
                     });
                     if (extractedResult.pages && extractedResult.pages.length > 0) {
                         documentsWithPages.push(file.originalname);
                     }
+                    console.log(`[PDF] ${file.originalname}: ${extractedResult.pages?.length || 0} pages, ${extractedResult.tables?.length || 0} tables`);
                 }
             }
             
@@ -455,8 +618,36 @@ app.post('/api/generate', upload.array('documents'), async (req, res) => {
                 const allChunkDocs = [];
                 
                 for (const doc of documents) {
+                    // Add table summaries as special chunks
+                    if (doc.tables && doc.tables.length > 0) {
+                        for (const table of doc.tables) {
+                            allChunkDocs.push({
+                                text: `TABLE DATA: ${table.summary}\n${table.markdown}`,
+                                source: `${doc.source} (Table ${table.index})`,
+                                pageNumber: null,
+                                isPartial: false,
+                                isTable: true,
+                                tableIndex: table.index
+                            });
+                        }
+                    }
+                    
+                    // Add image descriptions
+                    if (doc.images && doc.images.length > 0) {
+                        for (const image of doc.images) {
+                            allChunkDocs.push({
+                                text: `FIGURE DESCRIPTION: ${image.description}`,
+                                source: `${doc.source} (Figure ${image.index})`,
+                                pageNumber: null,
+                                isPartial: false,
+                                isImage: true,
+                                imageIndex: image.index
+                            });
+                        }
+                    }
+                    
+                    // Add page chunks
                     if (doc.pages && doc.pages.length > 0) {
-                        // Use page-based chunking for PDFs
                         const pageChunks = graphRAG.chunkByPages(doc.pages, 4000);
                         for (const pageChunk of pageChunks) {
                             allChunkDocs.push({
@@ -498,10 +689,19 @@ app.post('/api/generate', upload.array('documents'), async (req, res) => {
                         if (chunkInfo.pageNumber) {
                             sourceLabel = `${chunkInfo.source} (Page ${chunkInfo.pageNumber}${chunkInfo.isPartial ? ` Part ${chunkInfo.partialIndex}/${chunkInfo.totalPartials}` : ''})`;
                         }
+                        if (chunkInfo.isTable) {
+                            sourceLabel = `${chunkInfo.source} [TABLE]`;
+                        }
+                        if (chunkInfo.isImage) {
+                            sourceLabel = `${chunkInfo.source} [FIGURE]`;
+                        }
                         
                         chunkDocs.push({
                             text: chunkInfo.text,
-                            source: sourceLabel
+                            source: sourceLabel,
+                            pageNumber: chunkInfo.pageNumber,
+                            isTable: chunkInfo.isTable || false,
+                            isImage: chunkInfo.isImage || false
                         });
                     }
                     
