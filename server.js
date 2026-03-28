@@ -38,11 +38,10 @@ app.post('/api/generate', upload.array('documents'), async (req, res) => {
         let imageUrl = '';
         try {
             const imageResponse = await axios.post('https://api.venice.ai/api/v1/image/generate', {
-                model: 'nano-banana-2',
-                prompt: `A beautiful, minimalist scientific data visualization chart for a medical publication about: ${topic}. Clean white background, elegant enterprise design.`,
-                style_preset: 'photographic',
-                height: 1024,
+                model: 'flux-2-max', // Updated to a valid Venice image model
+                prompt: `A clean, professional scientific data visualization line chart for a medical journal, minimalist style, white background. Topic: ${topic}`,
                 width: 1024,
+                height: 1024,
                 return_binary: false
             }, {
                 headers: {
@@ -53,7 +52,6 @@ app.post('/api/generate', upload.array('documents'), async (req, res) => {
             imageUrl = imageResponse.data.images ? imageResponse.data.images[0] : '';
         } catch (imgError) {
              console.error('Image Generation Error:', imgError.response?.data || imgError.message);
-             // gracefully continue if image fails
         }
 
         res.json({
