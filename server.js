@@ -456,22 +456,63 @@ async function extractPDFContent(buffer, options = { extractTables: true, extrac
 async function fetchPubMedAbstracts(topic) {
     try {
         console.log(`[PubMed] Searching for: ${topic}`);
-        // 1. Search for top 3 article IDs related to the topic
-        const searchUrl = `https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed&term=${encodeURIComponent(topic)}&retmode=json&retmax=3&sort=relevance`;
+        
+        // Build boolean search query
+        const searchTerms = topic.toLowerCase().split(/\s+/).filter(t => t.length > 2);
+        const booleanQuery = searchTerms.map(t => `${t}[Title/Abstract]`).join(' AND ');
+        
+        // 1. Search for up to 23 article IDs
+        const searchUrl = `https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed&term=${encodeURIComponent(booleanQuery)}&retmode=json&retmax=23&sort=relevance`;
         const searchRes = await axios.get(searchUrl);
         const idList = searchRes.data.esearchresult?.idlist || [];
         
-        if (idList.length === 0) return "No direct PubMed literature found. Rely on general medical knowledge.";
+        console.log(`[PubMed] Found ${idList.length} articles`);
+        
+        if (idList.length === 0) return { text: "No direct PubMed literature found.", articles: [] };
 
-        // 2. Fetch the text abstracts for those IDs
-        console.log(`[PubMed] Fetching abstracts for IDs: ${idList.join(', ')}`);
+        // 2. Fetch detailed article data
+        console.log(`[PubMed] Fetching ${idList.length} article details`);
+        const summaryUrl = `https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi?db=pubmed&id=${idList.join(',')}&retmode=json`;
+        const summaryRes = await axios.get(summaryUrl);
+        
+        // 3. Fetch abstracts
         const fetchUrl = `https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=pubmed&id=${idList.join(',')}&rettype=abstract&retmode=text`;
         const fetchRes = await axios.get(fetchUrl);
         
-        return fetchRes.data; // Raw text abstracts
+        // Parse articles with metadata
+        const articles = [];
+        const abstracts = fetchRes.data.split('\n\n').filter(a => a.trim());
+        
+        for (let i = 0; i < idList.length && i < abstracts.length; i++) {
+            const pmid = idList[i];
+            const articleData = summaryRes.data.result?.[pmid];
+            
+            if (articleData) {
+                articles.push({
+                    pmid: pmid,
+                    title: articleData.title || 'Unknown Title',
+                    authors: articleData.authors?.map(a => a.name).slice(0, 5).join(', ') + (articleData.authors?.length > 5 ? ' et al.' : '') || 'Unknown',
+                    journal: articleData.source || 'Unknown Journal',
+                    year: articleData.pubdate?.substring(0, 4) || 'Unknown',
+                    abstract: abstracts[i]?.substring(0, 500) + '...' || 'No abstract available'
+                });
+            }
+        }
+        
+        // Build formatted text
+        const text = articles.map((a, i) => 
+            `[Article ${i + 1}] PMID: ${a.pmid}\nTitle: ${a.title}\nAuthors: ${a.authors}\nJournal: ${a.journal} (${a.year})\nAbstract: ${a.abstract}\n`
+        ).join('\n---\n\n');
+        
+        return {
+            text: text,
+            articles: articles,
+            query: booleanQuery,
+            totalFound: searchRes.data.esearchresult?.count || 0
+        };
     } catch (e) {
         console.error('[PubMed] Error fetching literature:', e.message);
-        return "Failed to retrieve PubMed literature. Rely on general medical knowledge.";
+        return { text: "Failed to retrieve PubMed literature.", articles: [], query: '', totalFound: 0 };
     }
 }
 
@@ -538,11 +579,12 @@ app.post('/api/generate', upload.array('documents'), async (req, res) => {
         // ============================================
         let ragContext = "";
         let citationMap = [];
+        let uploadContext = "No internal documents provided.";
         
         if (req.files && req.files.length > 0) {
             console.log(`[GraphRAG] Processing ${req.files.length} uploaded files...`);
         } else {
-            console.log('[GraphRAG] No documents uploaded, skipping to PubMed research...');
+            console.log('[GraphRAG] No documents uploaded, using PubMed research only...');
         }
             console.log(`[GraphRAG] Processing ${req.files.length} documents...`);
             
@@ -737,8 +779,10 @@ app.post('/api/generate', upload.array('documents'), async (req, res) => {
         } catch (e) {
             console.log('[RAG] Could not get topic embedding, using fallback');
         }
-        const literatureContext = await fetchPubMedAbstracts(topic);
-        console.log('[API] Literature context retrieved. Starting generation...');
+        const pubMedData = await fetchPubMedAbstracts(topic);
+        const literatureContext = pubMedData.text;
+        const pubMedArticles = pubMedData.articles || [];
+        console.log(`[API] Literature context retrieved: ${pubMedArticles.length} articles`);
         
         // ============================================
         // RETRIEVE RELEVANT CONTEXT USING GRAPH RAG
@@ -752,7 +796,7 @@ app.post('/api/generate', upload.array('documents'), async (req, res) => {
         }
         
         let systemPrompt = 'You are an elite Medical Affairs AI writer.';
-        let userInstruction = `Please generate the manuscript draft including Introduction, Methodology summary, and Conclusion based on this combined data. Cite the authors in-text.`;
+        let userInstruction = `Please generate the manuscript draft including Introduction, Methodology summary, and Conclusion based on this combined data. Cite the authors in-text using [PMID: XXXXXX] format for PubMed articles.`;
         
         switch(outputType) {
             case 'abstract':
@@ -869,9 +913,18 @@ app.post('/api/generate', upload.array('documents'), async (req, res) => {
         
         // Build references section
         let referencesSection = '';
+        
+        // Add PubMed articles to references
+        if (pubMedArticles.length > 0) {
+            referencesSection = '\n\n## PubMed References\n\n' + pubMedArticles.map((a, i) => 
+                `[${i + 1}] PMID: ${a.pmid}\n**${a.title}**\n${a.authors}\n*${a.journal}* (${a.year})\n\`
+            ).join('\n---\n\n');
+        }
+        
+        // Add uploaded document references
         if (citationMap.length > 0) {
             const uniqueSources = [...new Set(citationMap.map(c => c.source))];
-            referencesSection = '\n\n## References\n\n' + uniqueSources.map((s, i) => {
+            referencesSection += '\n\n## Document References\n\n' + uniqueSources.map((s, i) => {
                 const citationsForSource = citationMap.filter(c => c.source === s);
                 const avgRelevance = Math.round(citationsForSource.reduce((a, b) => a + b.relevance, 0) / citationsForSource.length * 100);
                 const pages = [...new Set(citationsForSource.map(c => c.page).filter(Boolean))];
@@ -881,7 +934,7 @@ app.post('/api/generate', upload.array('documents'), async (req, res) => {
         }
         
         // Send final data and close SSE stream
-        res.write(`data: ${JSON.stringify({ complete: true, success: true, manuscript: manuscriptText + referencesSection, imageUrls: imageUrls, citations: citationMap })}
+        res.write(`data: ${JSON.stringify({ complete: true, success: true, manuscript: manuscriptText + referencesSection, imageUrls: imageUrls, citations: citationMap, pubMedArticles: pubMedArticles, booleanQuery: pubMedData.query || '' })}`}
 
 `);
         res.end();
