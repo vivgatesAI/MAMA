@@ -14,16 +14,43 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 const VENICE_API_KEY = process.env.VENICE_API_KEY || '';
 
+// Helper function to fetch real clinical literature from PubMed
+async function fetchPubMedAbstracts(topic) {
+    try {
+        console.log(`[PubMed] Searching for: ${topic}`);
+        // 1. Search for top 3 article IDs related to the topic
+        const searchUrl = `https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed&term=${encodeURIComponent(topic)}&retmode=json&retmax=3&sort=relevance`;
+        const searchRes = await axios.get(searchUrl);
+        const idList = searchRes.data.esearchresult?.idlist || [];
+        
+        if (idList.length === 0) return "No direct PubMed literature found. Rely on general medical knowledge.";
+
+        // 2. Fetch the text abstracts for those IDs
+        console.log(`[PubMed] Fetching abstracts for IDs: ${idList.join(', ')}`);
+        const fetchUrl = `https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=pubmed&id=${idList.join(',')}&rettype=abstract&retmode=text`;
+        const fetchRes = await axios.get(fetchUrl);
+        
+        return fetchRes.data; // Raw text abstracts
+    } catch (e) {
+        console.error('[PubMed] Error fetching literature:', e.message);
+        return "Failed to retrieve PubMed literature. Rely on general medical knowledge.";
+    }
+}
+
 app.post('/api/generate', upload.array('documents'), async (req, res) => {
     try {
         const { topic } = req.body;
+        
+        // 0. Fetch real literature context
+        const literatureContext = await fetchPubMedAbstracts(topic);
+        console.log('[API] Literature context retrieved. Starting generation...');
         
         // 1. Generate Manuscript Text using venice api
         const chatResponse = await axios.post('https://api.venice.ai/api/v1/chat/completions', {
             model: 'gemini-3-flash-preview',
             messages: [
-                { role: 'system', content: 'You are an elite Medical Affairs AI writer. Write a pristine, elegant scientific manuscript based on the provided topic.' },
-                { role: 'user', content: `Topic: ${topic}\nPlease generate the executive summary, abstract, and plain language summary.` }
+                { role: 'system', content: 'You are an elite Medical Affairs AI writer. Write a pristine, elegant scientific manuscript. You must heavily reference and incorporate the provided valid clinical literature from PubMed in your draft.' },
+                { role: 'user', content: `Topic: ${topic}\n\n=== RECENT PUBMED LITERATURE EXTRACT ===\n${literatureContext}\n=====================================\n\nPlease generate the manuscript draft including Introduction, Methodology summary, and Conclusion based on this real data. Cite the authors in-text.` }
             ]
         }, {
             headers: {
