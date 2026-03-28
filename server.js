@@ -558,7 +558,8 @@ app.post('/api/generate', upload.array('documents'), async (req, res) => {
     res.setHeader('Connection', 'keep-alive');
     
     try {
-        const { topic, outputType, template } = req.body;
+        const { topic, outputType, template, researchMode } = req.body;
+        const mode = researchMode || 'both'; // 'both', 'documents', 'pubmed'
         
         // Validate required fields
         if (!topic || topic.trim() === '') {
@@ -572,7 +573,7 @@ app.post('/api/generate', upload.array('documents'), async (req, res) => {
         sendProgress(res, 1, 'Processing uploaded documents...', 10);
         
         // Debug logging
-        console.log(`[API] Request received: topic="${topic.substring(0, 50)}...", files=${req.files?.length || 0}, outputType=${outputType || 'manuscript'}`);
+        console.log(`[API] Request received: topic="${topic.substring(0, 50)}...", files=${req.files?.length || 0}, outputType=${outputType || 'manuscript'}, mode=${mode}`);
         
         // ============================================
         // GRAPH RAG PROCESSING
@@ -581,7 +582,8 @@ app.post('/api/generate', upload.array('documents'), async (req, res) => {
         let citationMap = [];
         let uploadContext = "No internal documents provided.";
         
-        if (req.files && req.files.length > 0) {
+        // Process documents if mode allows
+        if ((mode === 'documents' || mode === 'both') && req.files && req.files.length > 0) {
             console.log(`[GraphRAG] Processing ${req.files.length} uploaded files...`);
             
             // Extract text from all documents - with page preservation for PDFs
@@ -760,25 +762,34 @@ app.post('/api/generate', upload.array('documents'), async (req, res) => {
             }
         }
 
-        sendProgress(res, 3, 'Fetching clinical literature from PubMed...', 30);
-        
-        // Get topic embedding for RAG retrieval
+        // Skip PubMed if mode is documents-only
+        let pubMedData = { text: '', articles: [], query: '', totalFound: 0 };
         let topicEmbedding = null;
-        try {
-            const topicEmbedRes = await axios.post('https://api.venice.ai/api/v1/embeddings', {
-                input: [topic],
-                model: 'voyage-2'
-            }, {
-                headers: { 'Authorization': `Bearer ${VENICE_API_KEY}`, 'Content-Type': 'application/json' }
-            });
-            topicEmbedding = topicEmbedRes.data.data[0];
-        } catch (e) {
-            console.log('[RAG] Could not get topic embedding, using fallback');
+        
+        if (mode !== 'documents') {
+            sendProgress(res, 3, 'Fetching clinical literature from PubMed...', 30);
+            
+            // Get topic embedding for RAG retrieval
+            try {
+                const topicEmbedRes = await axios.post('https://api.venice.ai/api/v1/embeddings', {
+                    input: [topic],
+                    model: 'voyage-2'
+                }, {
+                    headers: { 'Authorization': `Bearer ${VENICE_API_KEY}`, 'Content-Type': 'application/json' }
+                });
+                topicEmbedding = topicEmbedRes.data.data[0];
+            } catch (e) {
+                console.log('[RAG] Could not get topic embedding, using fallback');
+            }
+            
+            pubMedData = await fetchPubMedAbstracts(topic);
+            console.log(`[API] Literature context retrieved: ${pubMedData.articles?.length || 0} articles`);
+        } else {
+            console.log('[API] PubMed research skipped (documents-only mode)');
         }
-        const pubMedData = await fetchPubMedAbstracts(topic);
+        
         const literatureContext = pubMedData.text;
         const pubMedArticles = pubMedData.articles || [];
-        console.log(`[API] Literature context retrieved: ${pubMedArticles.length} articles`);
         
         // ============================================
         // RETRIEVE RELEVANT CONTEXT USING GRAPH RAG
@@ -791,8 +802,18 @@ app.post('/api/generate', upload.array('documents'), async (req, res) => {
             console.log(`[GraphRAG] Retrieved ${relevantChunks.length} relevant chunks`);
         }
         
+        // Adjust instructions based on research mode
         let systemPrompt = 'You are an elite Medical Affairs AI writer.';
-        let userInstruction = `Please generate the manuscript draft including Introduction, Methodology summary, and Conclusion based on this combined data. Cite the authors in-text using [PMID: XXXXXX] format for PubMed articles.`;
+        let userInstruction = '';
+        
+        if (mode === 'documents') {
+            userInstruction = `Please generate the manuscript draft based on the uploaded source documents. Cite the documents using [Source X] format.`;
+        } else if (mode === 'pubmed') {
+            userInstruction = `Please generate the manuscript draft based on the PubMed literature provided. Cite using [PMID: XXXXXX] format.`;
+        } else {
+            userInstruction = `Please generate the manuscript draft synthesizing BOTH the uploaded source documents AND the PubMed literature. Cite documents using [Source X] and PubMed articles using [PMID: XXXXXX] format.`;
+            systemPrompt += ' You are synthesizing internal documents with external literature to create a comprehensive, well-cited publication.';
+        }
         
         switch(outputType) {
             case 'abstract':
