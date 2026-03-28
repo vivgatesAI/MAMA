@@ -583,10 +583,6 @@ app.post('/api/generate', upload.array('documents'), async (req, res) => {
         
         if (req.files && req.files.length > 0) {
             console.log(`[GraphRAG] Processing ${req.files.length} uploaded files...`);
-        } else {
-            console.log('[GraphRAG] No documents uploaded, using PubMed research only...');
-        }
-            console.log(`[GraphRAG] Processing ${req.files.length} documents...`);
             
             // Extract text from all documents - with page preservation for PDFs
             const documents = [];
@@ -917,7 +913,7 @@ app.post('/api/generate', upload.array('documents'), async (req, res) => {
         // Add PubMed articles to references
         if (pubMedArticles.length > 0) {
             referencesSection = '\n\n## PubMed References\n\n' + pubMedArticles.map((a, i) => 
-                `[${i + 1}] PMID: ${a.pmid}\n**${a.title}**\n${a.authors}\n*${a.journal}* (${a.year})\n\`
+                `[${i + 1}] PMID: ${a.pmid}\n**${a.title}**\n${a.authors}\n*${a.journal}* (${a.year})\n`
             ).join('\n---\n\n');
         }
         
@@ -928,13 +924,13 @@ app.post('/api/generate', upload.array('documents'), async (req, res) => {
                 const citationsForSource = citationMap.filter(c => c.source === s);
                 const avgRelevance = Math.round(citationsForSource.reduce((a, b) => a + b.relevance, 0) / citationsForSource.length * 100);
                 const pages = [...new Set(citationsForSource.map(c => c.page).filter(Boolean))];
-                const pageStr = pages.length > 0 ? ` (Pages: ${pages.join(', ')})` : '';
-                return `[${i + 1}] ${s}${pageStr} - Relevance: ${avgRelevance}%`;
+                const pageStr = pages.length > 0 ? ' (Pages: ' + pages.join(', ') + ')' : '';
+                return '[' + (i + 1) + '] ' + s + pageStr + ' - Relevance: ' + avgRelevance + '%';
             }).join('\n');
         }
         
         // Send final data and close SSE stream
-        res.write(`data: ${JSON.stringify({ complete: true, success: true, manuscript: manuscriptText + referencesSection, imageUrls: imageUrls, citations: citationMap, pubMedArticles: pubMedArticles, booleanQuery: pubMedData.query || '' })}`}
+        res.write(`data: ${JSON.stringify({ complete: true, success: true, manuscript: manuscriptText + referencesSection, imageUrls: imageUrls, citations: citationMap, pubMedArticles: pubMedArticles, booleanQuery: pubMedData.query || '' })}
 
 `);
         res.end();
