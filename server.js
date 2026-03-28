@@ -63,28 +63,42 @@ async function createVeniceEmbeddings(documentTextArray) {
     }
 }
 
+// Progress event emitter helper
+function sendProgress(res, step, message, percent) {
+    if (res && res.write) {
+        res.write(`data: ${JSON.stringify({ step, message, percent })}
+
+`);
+    }
+}
+
 app.post('/api/generate', upload.array('documents'), async (req, res) => {
+    // Set up SSE headers
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    
     try {
         const { topic, outputType, template } = req.body;
+        
+        sendProgress(res, 1, 'Processing uploaded documents...', 10);
         
         // 0. Process any uploaded reference documents into RAG setup
         let uploadContext = "";
         let docTexts = [];
         if (req.files && req.files.length > 0) {
             console.log(`[File Upload] Received ${req.files.length} documents for RAG processing.`);
-            req.files.forEach(file => {
-                // simple simulated extraction for demo: just grabbing string buffer if text/csv/etc
-                // (for complex PDFs, a parsing library would be used here)
+            req.files.forEach((file, idx) => {
                 const snippet = file.buffer.toString('utf8').substring(0, 500); 
                 docTexts.push(`Extracted from ${file.originalname}: ${snippet}`);
             });
             uploadContext = docTexts.join('\n\n');
             
-            // Execute the embedding step via Venice API
+            sendProgress(res, 2, `Vectorizing ${req.files.length} document(s) with Venice AI...`, 20);
             await createVeniceEmbeddings(docTexts);
         }
 
-        // 1. Fetch real literature context
+        sendProgress(res, 3, 'Fetching clinical literature from PubMed...', 30);
         const literatureContext = await fetchPubMedAbstracts(topic);
         console.log('[API] Literature context retrieved. Starting generation...');
         
@@ -114,6 +128,8 @@ app.post('/api/generate', upload.array('documents'), async (req, res) => {
             userInstruction += '\n\n=== REQUIRED FORMAT TEMPLATE ===\n' + template;
         }
 
+        sendProgress(res, 4, `Drafting ${outputType || 'manuscript'} content with Kimi k2.5...`, 45);
+        
         // 2. Generate Manuscript Text using venice api
         const chatResponse = await axios.post('https://api.venice.ai/api/v1/chat/completions', {
             model: 'kimi-k2-5',
@@ -129,6 +145,7 @@ app.post('/api/generate', upload.array('documents'), async (req, res) => {
         });
         
         const manuscriptText = chatResponse.data.choices[0].message.content;
+        sendProgress(res, 5, 'Manuscript draft complete. Planning visualizations...', 60);
 
         // 3. Dynamically determine how many images are needed and generate their prompts
         let imagePrompts = [];
@@ -158,6 +175,7 @@ app.post('/api/generate', upload.array('documents'), async (req, res) => {
 
         let imageUrls = [];
         for (let i = 0; i < imagePrompts.length; i++) {
+            sendProgress(res, 6, `Generating figure ${i + 1} of ${imagePrompts.length} with grok-imagine...`, 65 + Math.floor((i / imagePrompts.length) * 25));
             try {
                 const imageResponse = await axios.post('https://api.venice.ai/api/v1/image/generate', {
                     model: 'grok-imagine', 
@@ -179,15 +197,20 @@ app.post('/api/generate', upload.array('documents'), async (req, res) => {
             }
         }
 
-        res.json({
-            success: true,
-            manuscript: manuscriptText,
-            imageUrls: imageUrls
-        });
+        sendProgress(res, 7, 'Finalizing document...', 95);
+        
+        // Send final data and close SSE stream
+        res.write(`data: ${JSON.stringify({ complete: true, success: true, manuscript: manuscriptText, imageUrls: imageUrls })}
+
+`);
+        res.end();
 
     } catch (error) {
         console.error('Venice API Error:', error.response?.data || error.message);
-        res.status(500).json({ error: 'Failed to generate manuscript using Venice AI' });
+        res.write(`data: ${JSON.stringify({ error: 'Failed to generate manuscript using Venice AI' })}
+
+`);
+        res.end();
     }
 });
 
