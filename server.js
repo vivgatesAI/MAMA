@@ -65,7 +65,7 @@ async function createVeniceEmbeddings(documentTextArray) {
 
 app.post('/api/generate', upload.array('documents'), async (req, res) => {
     try {
-        const { topic, outputType } = req.body;
+        const { topic, outputType, template } = req.body;
         
         // 0. Process any uploaded reference documents into RAG setup
         let uploadContext = "";
@@ -110,6 +110,9 @@ app.post('/api/generate', upload.array('documents'), async (req, res) => {
                 userInstruction = 'Please generate the manuscript draft including Introduction, Methodology summary, and Conclusion based on this combined data. Cite the authors in-text.';
                 break;
         }
+        if (template) {
+            userInstruction += '\n\n=== REQUIRED FORMAT TEMPLATE ===\n' + template;
+        }
 
         // 2. Generate Manuscript Text using venice api
         const chatResponse = await axios.post('https://api.venice.ai/api/v1/chat/completions', {
@@ -127,30 +130,59 @@ app.post('/api/generate', upload.array('documents'), async (req, res) => {
         
         const manuscriptText = chatResponse.data.choices[0].message.content;
 
-        // 2. Generate an elegant chart/image for the publication
-        let imageUrl = '';
+        // 3. Dynamically determine how many images are needed and generate their prompts
+        let imagePrompts = [];
         try {
-            const imageResponse = await axios.post('https://api.venice.ai/api/v1/image/generate', {
-                model: 'flux-2-max', // Updated to a valid Venice image model
-                prompt: `A clean, professional scientific data visualization line chart for a medical journal, minimalist style, white background. Topic: ${topic}`,
-                width: 1024,
-                height: 1024,
-                return_binary: false
+            const promptDetermineResponse = await axios.post('https://api.venice.ai/api/v1/chat/completions', {
+                model: 'kimi-k2-5',
+                messages: [
+                    { role: 'system', content: 'You are an AI that decides what scientific charts or images are needed for a medical document. Output ONLY a valid JSON array of strings, where each string is a detailed image generation prompt designed for "grok-imagine". Generate between 0 and 5 prompts depending on what is appropriate for the document type (e.g. 0 for abstracts, 5 for full manuscripts). Return ONLY JSON, no markdown formatting.' },
+                    { role: 'user', content: `Document Type: ${outputType}\n\nManuscript content:\n${manuscriptText.substring(0, 2000)}\n\nDetermine the visuals needed and provide the JSON array of prompts.` }
+                ]
             }, {
-                headers: {
-                    'Authorization': `Bearer ${VENICE_API_KEY}`,
-                    'Content-Type': 'application/json'
-                }
+                headers: { 'Authorization': `Bearer ${VENICE_API_KEY}`, 'Content-Type': 'application/json' }
             });
-            imageUrl = imageResponse.data.images ? imageResponse.data.images[0] : '';
-        } catch (imgError) {
-             console.error('Image Generation Error:', imgError.response?.data || imgError.message);
+            
+            let jsonString = promptDetermineResponse.data.choices[0].message.content.trim();
+            if(jsonString.startsWith('```json')) jsonString = jsonString.slice(7, -3).trim();
+            else if(jsonString.startsWith('```')) jsonString = jsonString.slice(3, -3).trim();
+            
+            imagePrompts = JSON.parse(jsonString);
+            if (!Array.isArray(imagePrompts)) imagePrompts = [];
+            if (imagePrompts.length > 10) imagePrompts = imagePrompts.slice(0, 10);
+            console.log(`[Images] Determined we need ${imagePrompts.length} images.`);
+        } catch (e) {
+            console.error('[Images] Failed to determine image prompts, falling back to 1 default.', e.message);
+            imagePrompts = [`A clean, professional scientific data visualization for a medical journal, minimalist style, white background. Topic: ${topic}`];
+        }
+
+        let imageUrls = [];
+        for (let i = 0; i < imagePrompts.length; i++) {
+            try {
+                const imageResponse = await axios.post('https://api.venice.ai/api/v1/image/generate', {
+                    model: 'grok-imagine', 
+                    prompt: imagePrompts[i],
+                    width: 1024,
+                    height: 1024,
+                    return_binary: false
+                }, {
+                    headers: { 'Authorization': `Bearer ${VENICE_API_KEY}`, 'Content-Type': 'application/json' }
+                });
+                if (imageResponse.data.images && imageResponse.data.images[0]) {
+                    imageUrls.push({
+                        url: imageResponse.data.images[0],
+                        prompt: imagePrompts[i]
+                    });
+                }
+            } catch (imgError) {
+                 console.error(`Image Gen Error for prompt ${i}:`, imgError.response?.data?.error || imgError.message);
+            }
         }
 
         res.json({
             success: true,
             manuscript: manuscriptText,
-            imageUrl: imageUrl
+            imageUrls: imageUrls
         });
 
     } catch (error) {
