@@ -3,6 +3,7 @@ const multer = require('multer');
 const axios = require('axios');
 const dotenv = require('dotenv');
 const path = require('path');
+const pdfParse = require('pdf-parse');
 
 dotenv.config();
 
@@ -13,6 +14,17 @@ app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
 const VENICE_API_KEY = process.env.VENICE_API_KEY || '';
+
+// Helper to extract text from PDF buffers
+async function extractPDFText(buffer) {
+    try {
+        const data = await pdfParse(buffer);
+        return data.text.substring(0, 10000); // Limit to first 10k chars
+    } catch (e) {
+        console.error('[PDF] Error parsing PDF:', e.message);
+        return null;
+    }
+}
 
 // Helper function to fetch real clinical literature from PubMed
 async function fetchPubMedAbstracts(topic) {
@@ -88,11 +100,26 @@ app.post('/api/generate', upload.array('documents'), async (req, res) => {
         let docTexts = [];
         if (req.files && req.files.length > 0) {
             console.log(`[File Upload] Received ${req.files.length} documents for RAG processing.`);
-            req.files.forEach((file, idx) => {
-                const snippet = file.buffer.toString('utf8').substring(0, 500); 
-                docTexts.push(`Extracted from ${file.originalname}: ${snippet}`);
-            });
-            uploadContext = docTexts.join('\n\n');
+            
+            for (const file of req.files) {
+                let extractedText = '';
+                
+                // Try to extract text based on file type
+                if (file.mimetype === 'application/pdf' || file.originalname.toLowerCase().endsWith('.pdf')) {
+                    sendProgress(res, 1, `Extracting text from ${file.originalname}...`, 12);
+                    extractedText = await extractPDFText(file.buffer);
+                    if (!extractedText) {
+                        extractedText = `[Could not extract text from ${file.originalname} - may be image-based PDF]`;
+                    }
+                } else {
+                    // For text-based files
+                    extractedText = file.buffer.toString('utf8').substring(0, 5000);
+                }
+                
+                docTexts.push(`=== ${file.originalname} ===\n${extractedText}`);
+            }
+            
+            uploadContext = docTexts.join('\n\n---\n\n');
             
             sendProgress(res, 2, `Vectorizing ${req.files.length} document(s) with Venice AI...`, 20);
             await createVeniceEmbeddings(docTexts);
@@ -128,11 +155,11 @@ app.post('/api/generate', upload.array('documents'), async (req, res) => {
             userInstruction += '\n\n=== REQUIRED FORMAT TEMPLATE ===\n' + template;
         }
 
-        sendProgress(res, 4, `Drafting ${outputType || 'manuscript'} content with Kimi k2.5...`, 45);
+        sendProgress(res, 4, `Drafting ${outputType || 'manuscript'} content with Gemini 3 Flash...`, 45);
         
         // 2. Generate Manuscript Text using venice api
         const chatResponse = await axios.post('https://api.venice.ai/api/v1/chat/completions', {
-            model: 'kimi-k2-5',
+            model: 'gemini-3-flash-preview',
             messages: [
                 { role: 'system', content: systemPrompt },
                 { role: 'user', content: `Topic: ${topic}\n\n=== RECENT PUBMED LITERATURE EXTRACT ===\n${literatureContext}\n\n=== INTERNAL RAG DOCUMENT CONTEXT ===\n${uploadContext || "No internal documents provided."}\n=====================================\n\n${userInstruction}` }
@@ -151,7 +178,7 @@ app.post('/api/generate', upload.array('documents'), async (req, res) => {
         let imagePrompts = [];
         try {
             const promptDetermineResponse = await axios.post('https://api.venice.ai/api/v1/chat/completions', {
-                model: 'kimi-k2-5',
+                model: 'gemini-3-flash-preview',
                 messages: [
                     { role: 'system', content: 'You are an AI that decides what scientific charts or images are needed for a medical document. Output ONLY a valid JSON array of strings, where each string is a detailed image generation prompt designed for "grok-imagine". Generate between 0 and 5 prompts depending on what is appropriate for the document type (e.g. 0 for abstracts, 5 for full manuscripts). Return ONLY JSON, no markdown formatting.' },
                     { role: 'user', content: `Document Type: ${outputType}\n\nManuscript content:\n${manuscriptText.substring(0, 2000)}\n\nDetermine the visuals needed and provide the JSON array of prompts.` }
