@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MoonBark — Human ↔ Dog Conversation Studio</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <div class="aurora aurora-a"></div>
+  <div class="aurora aurora-b"></div>
+  <main class="shell">
+    <section class="hero glass">
+      <p class="eyebrow">Venice API experiment · conversational species bridge</p>
+      <h1>MoonBark</h1>
+      <p class="lede">Record your dog's voice, ask a question, and hear back a beautiful interpreted reply from your dog.</p>
+      <div class="hero-grid">
+        <div>
+          <label>Dog name</label>
+          <input id="dogName" placeholder="Mochi" />
+        </div>
+        <div>
+          <label>Your message to your dog</label>
+          <textarea id="humanMessage" placeholder="What are you trying to tell me right now?"></textarea>
+        </div>
+        <div>
+          <label>Dog's voice (TTS)</label>
+          <select id="voiceSelect">
+            <option value="am_echo" selected>Echo — Warm, gentle (default)</option>
+            <option value="am_shimmer">Shimmer — Bright, youthful</option>
+            <option value="am_nova">Nova — Clear, friendly</option>
+            <option value="am_michael">Michael — Calm, steady</option>
+            <option value="am_onyx">Onyx — Deep, thoughtful</option>
+            <option value="am_fable">Fable — Storyteller, wise</option>
+            <option value="am_sage">Sage — Soft, meditative</option>
+            <option value="am_alloy">Alloy — Neutral, balanced</option>
+          </select>
+        </div>
+      </div>
+      <div class="controls">
+        <button id="recordBtn" class="primary">Start recording</button>
+        <button id="stopBtn" disabled>Stop</button>
+        <span id="status">Ready to listen.</span>
+      </div>
+      <canvas id="waveform" width="1200" height="220"></canvas>
+    </section>
+
+    <section class="grid">
+      <article class="panel glass">
+        <h2>Dog signal profile</h2>
+        <div id="metrics" class="metrics empty">No recording yet.</div>
+      </article>
+      <article class="panel glass">
+        <h2>Translated dog reply</h2>
+        <div id="reply" class="reply empty">Your dog's interpreted voice will appear here.</div>
+        <audio id="replyAudio" controls hidden></audio>
+      </article>
+    </section>
+
+    <section class="grid bottom">
+      <article class="panel glass">
+        <h3>Intent</h3>
+        <p id="intent">—</p>
+      </article>
+      <article class="panel glass">
+        <h3>Human guidance</h3>
+        <p id="advice">—</p>
+      </article>
+      <article class="panel glass">
+        <h3>Inner monologue</h3>
+        <p id="monologue">—</p>
+      </article>
+    </section>
+  </main>
+  <script src="/app.js"></script>
+</body>
+</html>
